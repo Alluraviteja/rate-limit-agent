@@ -100,8 +100,12 @@ async def health_ready():
 @app.on_event("startup")
 async def _startup():
     logging.info("Running Alembic migrations...")
-    alembic_cfg = AlembicConfig(Path(__file__).parent.parent / "alembic.ini")
-    alembic_command.upgrade(alembic_cfg, "head")
+    try:
+        alembic_cfg = AlembicConfig(Path(__file__).parent.parent / "alembic.ini")
+        alembic_command.upgrade(alembic_cfg, "head")
+    except Exception:
+        logging.exception("Alembic migration failed — aborting startup")
+        raise
     logging.info("Migrations complete")
     _scheduler.start()
     logging.info(
