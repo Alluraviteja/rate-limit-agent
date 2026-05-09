@@ -1,0 +1,177 @@
+name: CD
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+
+# Never cancel a running deploy — a half-deployed state is worse than waiting.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  IMAGE: ${{ secrets.DOCKER_USERNAME }}/rate-limiter-agents
+
+jobs:
+  # ── Build & Push ────────────────────────────────────────────────────────────
+  build-push:
+    name: Build & Push
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.7.1
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_TOKEN }}
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.10.0
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          provenance: true
+          sbom: true
+          tags: |
+            ${{ env.IMAGE }}:latest
+            ${{ env.IMAGE }}:${{ github.event.workflow_run.head_sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.event.workflow_run.head_sha }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            REVISION=${{ github.event.workflow_run.head_sha }}
+            CREATED=${{ github.event.workflow_run.updated_at }}
+            SOURCE=${{ github.server_url }}/${{ github.repository }}
+          # Scoped separately from CI so the multi-arch cache is not mixed with
+          # the single-arch linux/amd64 cache written by the CI build step.
+          cache-from: type=gha,scope=cd
+          cache-to: type=gha,scope=cd,mode=max
+
+  # ── SSH Deploy with Rollback ────────────────────────────────────────────────
+  deploy:
+    name: Deploy to Production
+    needs: build-push
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    # This job sends no GitHub API calls; revoke all GITHUB_TOKEN permissions.
+    permissions: {}
+
+    steps:
+      - name: SSH deploy with rollback
+        uses: appleboy/ssh-action@029f5b4b9b443b5c7112c01589eee6cf5081d5e8 # v1.0.3
+        env:
+          # Image tagged with the exact commit SHA that passed CI
+          DEPLOY_IMAGE: ${{ secrets.DOCKER_USERNAME }}/rate-limiter-agents:${{ github.event.workflow_run.head_sha }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          RATE_LIMITER_DB: ${{ secrets.RATE_LIMITER_DB }}
+          AGENT_DB_URL: ${{ secrets.AGENT_DB_URL }}
+          LLM_PROVIDER: ${{ secrets.LLM_PROVIDER }}
+          LLM_MODEL: ${{ secrets.LLM_MODEL }}
+          CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
+          AGENT_INTERVAL_MINUTES: ${{ secrets.AGENT_INTERVAL_MINUTES }}
+          DOCKER_NETWORK: ${{ secrets.DOCKER_NETWORK }}
+          CONTAINER_PORT: ${{ secrets.CONTAINER_PORT }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: DEPLOY_IMAGE,ANTHROPIC_API_KEY,RATE_LIMITER_DB,AGENT_DB_URL,LLM_PROVIDER,LLM_MODEL,CORS_ORIGINS,AGENT_INTERVAL_MINUTES,DOCKER_NETWORK,CONTAINER_PORT
+          script: |
+            set -euo pipefail
+            CONTAINER="rate-limiter-agents"
+
+            echo "Deploying image: $DEPLOY_IMAGE"
+
+            # Capture the currently running image so we can roll back to it if
+            # the new container fails its health check.
+            PREV_IMAGE=$(docker inspect --format='{{.Config.Image}}' "$CONTAINER" 2>/dev/null || echo "")
+            echo "Previous image: ${PREV_IMAGE:-<none>}"
+
+            # Pull new image before stopping old container to minimise downtime.
+            docker pull "$DEPLOY_IMAGE"
+
+            # Shared helper — keeps env-var list in one place for both the
+            # normal deploy path and the rollback path.
+            start_container() {
+              local img=$1
+              docker run -d \
+                --name "$CONTAINER" \
+                --restart unless-stopped \
+                --network "${DOCKER_NETWORK:-bridge}" \
+                -p "${CONTAINER_PORT:-8000}:8000" \
+                -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
+                -e RATE_LIMITER_DB="$RATE_LIMITER_DB" \
+                -e AGENT_DB_URL="$AGENT_DB_URL" \
+                -e LLM_PROVIDER="${LLM_PROVIDER:-anthropic}" \
+                -e LLM_MODEL="${LLM_MODEL:-claude-haiku-4-5-20251001}" \
+                -e CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:8000}" \
+                -e AGENT_INTERVAL_MINUTES="${AGENT_INTERVAL_MINUTES:-15}" \
+                "$img"
+            }
+
+            # Replace the running container.
+            docker stop "$CONTAINER" 2>/dev/null || true
+            docker rm   "$CONTAINER" 2>/dev/null || true
+            start_container "$DEPLOY_IMAGE"
+
+            # Poll Docker's native HEALTHCHECK (set in the image) for up to 90 s.
+            # Interval=30s + start-period=30s means the first check fires ~30 s in;
+            # we poll every 5 s so we react as soon as Docker marks it healthy.
+            echo "Waiting for container health check (up to 90 s)..."
+            HEALTHY=0
+            for i in $(seq 1 18); do
+              STATUS=$(docker inspect --format='{{.State.Health.Status}}' "$CONTAINER" 2>/dev/null || echo "none")
+              printf "  [%2d/18] %s\n" "$i" "$STATUS"
+              if [ "$STATUS" = "healthy" ]; then
+                HEALTHY=1
+                break
+              fi
+              if [ "$STATUS" = "unhealthy" ]; then
+                break
+              fi
+              sleep 5
+            done
+
+            if [ "$HEALTHY" -eq 1 ]; then
+              echo "Deploy successful: $DEPLOY_IMAGE"
+              # Remove only the previous image for this app, not all dangling images.
+              # Skipped when PREV_IMAGE is empty (first-ever deploy).
+              if [ -n "$PREV_IMAGE" ] && [ "$PREV_IMAGE" != "$DEPLOY_IMAGE" ]; then
+                docker rmi "$PREV_IMAGE" 2>/dev/null || true
+              fi
+              exit 0
+            fi
+
+            # ── Rollback ──────────────────────────────────────────────────────
+            echo "ERROR: container not healthy after 90 s — rolling back."
+            docker logs "$CONTAINER" --tail 100 || true
+            docker stop "$CONTAINER" 2>/dev/null || true
+            docker rm   "$CONTAINER" 2>/dev/null || true
+
+            if [ -n "$PREV_IMAGE" ]; then
+              echo "Starting previous image: $PREV_IMAGE"
+              start_container "$PREV_IMAGE"
+              echo "Rollback complete. Running: $PREV_IMAGE"
+            else
+              echo "No previous image recorded — service remains stopped."
+            fi
+
+            exit 1

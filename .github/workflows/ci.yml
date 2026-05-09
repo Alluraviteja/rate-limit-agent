@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.head_ref || github.sha }}
+  cancel-in-progress: true
+
+# Least-privilege: CI only needs to read source code.
+# Individual jobs can escalate if needed (none currently do).
+permissions:
+  contents: read
+
+env:
+  IMAGE: ${{ secrets.DOCKER_USERNAME }}/rate-limiter-agents
+
+jobs:
+  ci:
+    name: Lint, Test & Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0
+
+      - name: Secrets scan (TruffleHog)
+        uses: trufflesecurity/trufflehog@17456f8c7d042d8c82c9a8ca9e937231f9f42e26 # v3.95.2
+        with:
+          base: ${{ github.event.pull_request.base.sha || github.event.before }}
+          head: HEAD
+          extra_args: --only-verified
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@0b93645e9fea7318ecaed2b359559ac225c90a2 # v5.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Type check (mypy)
+        run: mypy rate_limiter_agents/ --ignore-missing-imports
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Format check (ruff)
+        run: ruff format --check .
+
+      - name: Test
+        run: |
+          mkdir -p test-reports
+          set +e
+          python -m pytest --junitxml=test-reports/results.xml -q
+          EXIT_CODE=$?
+          set -e
+          # exit 5 = no tests collected — treat as passing
+          [ "$EXIT_CODE" -eq 5 ] && exit 0 || exit "$EXIT_CODE"
+
+      - name: Upload test reports
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882 # v4.4.3
+        if: always()
+        with:
+          name: pytest-results
+          path: test-reports/
+          retention-days: 7
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          skip-dirs: .venv
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f95db51fddba0c2d1ec667646a06c2ce06100226 # v3.7.1
+
+      - name: Build Docker image (validate, no push)
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6.10.0
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ${{ env.IMAGE }}:ci-${{ github.sha }}
+          build-args: |
+            VERSION=${{ github.ref_name }}
+            REVISION=${{ github.sha }}
+          # Scoped separately from CD so multi-arch CD layers are not overwritten
+          # by this single-arch CI build.
+          cache-from: type=gha,scope=ci
+          cache-to: type=gha,scope=ci,mode=max
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          scan-type: image
+          image-ref: ${{ env.IMAGE }}:ci-${{ github.sha }}
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
