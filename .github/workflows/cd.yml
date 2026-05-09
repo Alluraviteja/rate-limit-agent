@@ -88,12 +88,11 @@ jobs:
           CORS_ORIGINS: ${{ secrets.CORS_ORIGINS }}
           AGENT_INTERVAL_MINUTES: ${{ secrets.AGENT_INTERVAL_MINUTES }}
           DOCKER_NETWORK: ${{ secrets.DOCKER_NETWORK }}
-          CONTAINER_PORT: ${{ secrets.CONTAINER_PORT }}
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
-          envs: DEPLOY_IMAGE,ANTHROPIC_API_KEY,RATE_LIMITER_DB,AGENT_DB_URL,LLM_PROVIDER,LLM_MODEL,CORS_ORIGINS,AGENT_INTERVAL_MINUTES,DOCKER_NETWORK,CONTAINER_PORT
+          envs: DEPLOY_IMAGE,ANTHROPIC_API_KEY,RATE_LIMITER_DB,AGENT_DB_URL,LLM_PROVIDER,LLM_MODEL,CORS_ORIGINS,AGENT_INTERVAL_MINUTES,DOCKER_NETWORK
           script: |
             set -euo pipefail
             CONTAINER="rate-limiter-agents"
@@ -115,8 +114,7 @@ jobs:
               docker run -d \
                 --name "$CONTAINER" \
                 --restart unless-stopped \
-                --network "${DOCKER_NETWORK:-bridge}" \
-                -p "${CONTAINER_PORT:-8000}:8000" \
+                --network "${DOCKER_NETWORK:-my-app-network}" \
                 -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
                 -e RATE_LIMITER_DB="$RATE_LIMITER_DB" \
                 -e AGENT_DB_URL="$AGENT_DB_URL" \
