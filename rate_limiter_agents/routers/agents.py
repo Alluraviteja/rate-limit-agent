@@ -36,7 +36,7 @@ def _enabled_ids(rate_db: Session, app_info_id: Optional[int]) -> list[int]:
     if app_info_id:
         return [app_info_id]
     return [
-        a.id for a in rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
+        int(a.id) for a in rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
     ]
 
 

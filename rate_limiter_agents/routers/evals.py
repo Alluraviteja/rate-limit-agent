@@ -34,13 +34,14 @@ def get_eval_results(
 
     runs: dict[str, dict] = {}
     for r in rows:
-        if r.run_id not in runs:
-            runs[r.run_id] = {
-                "run_id": r.run_id,
+        run_id = str(r.run_id)
+        if run_id not in runs:
+            runs[run_id] = {
+                "run_id": run_id,
                 "run_at": r.run_at.isoformat() if r.run_at else None,
                 "checks": [],
             }
-        runs[r.run_id]["checks"].append({
+        runs[run_id]["checks"].append({
             "scenario": r.scenario_name,
             "agent": r.agent_name,
             "expected_severity": r.expected_severity,
@@ -101,7 +102,7 @@ def get_eval_summary(agent_db: Session = Depends(get_agent_db)):
 
     by_run: dict[str, list[EvalRunResult]] = defaultdict(list)
     for r in rows:
-        by_run[r.run_id].append(r)
+        by_run[str(r.run_id)].append(r)
 
     trend = []
     for run_id, results in by_run.items():

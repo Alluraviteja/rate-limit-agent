@@ -56,7 +56,7 @@ def run_all_agents() -> None:
 
         for app_info in app_infos:
             try:
-                _, _, _, orch = execute_agent_pipeline(rate_db, agent_db, app_info.id)
+                _, _, _, orch = execute_agent_pipeline(rate_db, agent_db, int(app_info.id))
                 logger.info(
                     "app_info_id=%s (%s) — severity=%s action=%s",
                     app_info.id,

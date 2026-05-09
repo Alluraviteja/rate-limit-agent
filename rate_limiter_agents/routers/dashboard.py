@@ -32,7 +32,7 @@ def _enabled_ids(rate_db: Session, app_info_id: Optional[int]) -> list[int]:
     if app_info_id:
         return [app_info_id]
     return [
-        a.id for a in rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
+        int(a.id) for a in rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
     ]
 
 
@@ -139,7 +139,7 @@ def timeline(
             )
             .all()
         )
-        by_name = {a.agent_name: a for a in agents}
+        by_name = {str(a.agent_name): a for a in agents}
         e  = by_name.get("error_pattern")
         t  = by_name.get("token_bucket_health")
         p  = by_name.get("top_paths")
@@ -226,7 +226,7 @@ def cost(
                 AgentResult.agent_name == name,
                 AgentResult.run_at >= today_start,
             )
-        cnt, tok, cst = q.first()
+        cnt, tok, cst = q.first() or (0, 0, 0)
         by_agent.append({
             "agent_name": name,
             "runs_today": int(cnt or 0),

@@ -55,24 +55,24 @@ def update_baseline(
 
     if peak_rps_vals:
         new_val = sum(peak_rps_vals) / len(peak_rps_vals)
-        baseline.avg_rps_7d = (float(baseline.avg_rps_7d) * n + new_val) / (n + 1)
+        baseline.avg_rps_7d = (float(baseline.avg_rps_7d) * n + new_val) / (n + 1)  # type: ignore[assignment]
 
     if block_rate_vals:
         new_val = sum(block_rate_vals) / len(block_rate_vals)
-        baseline.avg_block_rate_7d = (float(baseline.avg_block_rate_7d) * n + new_val) / (n + 1)
+        baseline.avg_block_rate_7d = (float(baseline.avg_block_rate_7d) * n + new_val) / (n + 1)  # type: ignore[assignment]
 
     if bot_ratio_vals:
         new_val = sum(bot_ratio_vals) / len(bot_ratio_vals)
-        baseline.avg_bot_ratio_7d = (float(baseline.avg_bot_ratio_7d) * n + new_val) / (n + 1)
+        baseline.avg_bot_ratio_7d = (float(baseline.avg_bot_ratio_7d) * n + new_val) / (n + 1)  # type: ignore[assignment]
 
     avg_block = float(baseline.avg_block_rate_7d)
     if avg_block < 5.0:
-        baseline.spike_threshold = 2.5
+        baseline.spike_threshold = 2.5  # type: ignore[assignment]
     elif avg_block > 20.0:
-        baseline.spike_threshold = 4.0
+        baseline.spike_threshold = 4.0  # type: ignore[assignment]
     else:
-        baseline.spike_threshold = 3.0
+        baseline.spike_threshold = 3.0  # type: ignore[assignment]
 
-    baseline.sample_count = min(n + 1, 672)
-    baseline.last_updated = datetime.now(timezone.utc)
+    baseline.sample_count = min(n + 1, 672)  # type: ignore[assignment]
+    baseline.last_updated = datetime.now(timezone.utc)  # type: ignore[assignment]
     db.commit()
