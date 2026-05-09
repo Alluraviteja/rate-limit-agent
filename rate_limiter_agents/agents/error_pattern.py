@@ -37,7 +37,11 @@ ACTION: monitor/alert/throttle/block"""
 
 class ErrorPatternAgent:
     def analyze(
-        self, rate_db: Session, agent_db: Session, app_info_id: int, per_ip_address: bool = False
+        self,
+        rate_db: Session,
+        agent_db: Session,
+        app_info_id: int,
+        per_ip_address: bool = False,
     ) -> AgentResult:
         try:
             cutoff = datetime.now(timezone.utc) - timedelta(minutes=15)
@@ -52,14 +56,18 @@ class ErrorPatternAgent:
             )
 
             summary = build_error_summary(logs, per_ip_address=per_ip_address)
-            mode = "per-IP (each client IP has its own token bucket)" if per_ip_address else "shared (all clients share one token bucket)"
+            mode = (
+                "per-IP (each client IP has its own token bucket)"
+                if per_ip_address
+                else "shared (all clients share one token bucket)"
+            )
             user_msg = f"Rate limiting mode: {mode}\nError metrics (last 15 min):\n{json.dumps(summary, indent=2)}"
 
             response = _provider.complete_with_retry(_SYSTEM, user_msg, max_tokens=200)
 
             parsed = _parse(response.content)
-            inp  = response.input_tokens
-            out  = response.output_tokens
+            inp = response.input_tokens
+            out = response.output_tokens
             cost = response.cost_usd
 
             result = AgentResult(
@@ -67,7 +75,8 @@ class ErrorPatternAgent:
                 agent_name="error_pattern",
                 anomaly_detected=parsed.get("ANOMALY", "NO").upper() == "YES",
                 severity=parsed.get("SEVERITY", "none").lower(),
-                block_rate_pct=_num(parsed.get("BLOCK_RATE")) or summary["block_rate_pct"],
+                block_rate_pct=_num(parsed.get("BLOCK_RATE"))
+                or summary["block_rate_pct"],
                 total_requests=summary["total_requests"],
                 blocked_requests=summary["blocked_requests"],
                 reason=parsed.get("REASON", ""),

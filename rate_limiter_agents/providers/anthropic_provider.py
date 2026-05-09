@@ -23,8 +23,11 @@ class AnthropicProvider(BaseLLMProvider):
         )
         inp = response.usage.input_tokens
         out = response.usage.output_tokens
+        text = next(
+            b.text for b in response.content if isinstance(b, anthropic.types.TextBlock)
+        )
         return LLMResponse(
-            content=response.content[0].text,
+            content=text,
             input_tokens=inp,
             output_tokens=out,
             cost_usd=inp * _INPUT_COST_PER_TOKEN + out * _OUTPUT_COST_PER_TOKEN,

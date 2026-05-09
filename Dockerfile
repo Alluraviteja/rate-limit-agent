@@ -4,11 +4,11 @@ ARG VERSION=unknown
 ARG REVISION=unknown
 
 # ── Build stage ───────────────────────────────────────────────────────────────
-FROM python:3.12.3-slim-bookworm AS builder
+FROM python:3.12.13-slim-bookworm AS builder
 
 WORKDIR /build
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     gcc libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -19,10 +19,12 @@ COPY requirements.txt .
 # --no-cache-dir is intentionally omitted: it would disable the mount cache.
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
     python -m venv /venv && \
+    /venv/bin/pip install --no-warn-script-location \
+        "setuptools==82.0.1" "wheel==0.47.0" && \
     /venv/bin/pip install --no-warn-script-location -r requirements.txt
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
-FROM python:3.12.3-slim-bookworm AS runtime
+FROM python:3.12.13-slim-bookworm AS runtime
 
 ARG VERSION=unknown
 ARG REVISION=unknown
@@ -38,7 +40,7 @@ LABEL org.opencontainers.image.title="rate-limiter-agents" \
       org.opencontainers.image.licenses="MIT"
 
 # libpq5: runtime shared library only (not headers). tini: PID-1 signal forwarding.
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libpq5 tini \
     && rm -rf /var/lib/apt/lists/*
 

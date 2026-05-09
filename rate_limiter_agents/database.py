@@ -7,7 +7,9 @@ from . import config
 
 # ── Rate limiter DB (read-only: rate_limit_log, app_info, rate_limit_plan) ──
 rate_limiter_engine = create_engine(config.RATE_LIMITER_DB, pool_pre_ping=True)
-RateLimiterSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=rate_limiter_engine)
+RateLimiterSessionLocal = sessionmaker(
+    autocommit=False, autoflush=False, bind=rate_limiter_engine
+)
 RateLimiterScopedSession = scoped_session(RateLimiterSessionLocal)
 RateLimiterBase = declarative_base()
 

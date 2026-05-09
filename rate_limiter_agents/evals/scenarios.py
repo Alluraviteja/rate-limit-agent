@@ -46,6 +46,7 @@ def _log(
 
 # ── Scenario factories ───────────────────────────────────────────────────────
 
+
 def _normal_traffic() -> list[dict]:
     now = _now()
     paths = ["/api/v1/users", "/api/v1/items", "/api/v1/search", "/api/v1/status"]
@@ -53,14 +54,16 @@ def _normal_traffic() -> list[dict]:
     for i in range(200):
         at = now - timedelta(minutes=14) + timedelta(seconds=i * 4)
         blocked = i < 4
-        logs.append(_log(
-            request_at=at,
-            was_blocked=blocked,
-            response_code=429 if blocked else 200,
-            remaining_tokens=80 + (i % 20),
-            request_path=paths[i % len(paths)],
-            reason="rate_limit" if blocked else None,
-        ))
+        logs.append(
+            _log(
+                request_at=at,
+                was_blocked=blocked,
+                response_code=429 if blocked else 200,
+                remaining_tokens=80 + (i % 20),
+                request_path=paths[i % len(paths)],
+                reason="rate_limit" if blocked else None,
+            )
+        )
     return logs
 
 
@@ -78,13 +81,15 @@ def _high_error_rate() -> list[dict]:
             reason = "not_found" if code == 404 else "forbidden"
         else:
             code, blocked, reason = 200, False, None
-        logs.append(_log(
-            request_at=at,
-            was_blocked=blocked,
-            response_code=code,
-            remaining_tokens=50 + (i % 50),
-            reason=reason,
-        ))
+        logs.append(
+            _log(
+                request_at=at,
+                was_blocked=blocked,
+                response_code=code,
+                remaining_tokens=50 + (i % 50),
+                reason=reason,
+            )
+        )
     return logs
 
 
@@ -95,13 +100,15 @@ def _high_block_rate() -> list[dict]:
     for i in range(100):
         at = now - timedelta(minutes=14) + timedelta(seconds=i * 8)
         blocked = i < 35
-        logs.append(_log(
-            request_at=at,
-            was_blocked=blocked,
-            response_code=429 if blocked else 200,
-            remaining_tokens=50 + (i % 50),
-            reason="rate_limit" if blocked else None,
-        ))
+        logs.append(
+            _log(
+                request_at=at,
+                was_blocked=blocked,
+                response_code=429 if blocked else 200,
+                remaining_tokens=50 + (i % 50),
+                reason="rate_limit" if blocked else None,
+            )
+        )
     return logs
 
 
@@ -117,12 +124,14 @@ def _token_depletion() -> list[dict]:
             tokens = 2
         else:
             tokens = 90
-        logs.append(_log(
-            request_at=at,
-            was_blocked=False,
-            response_code=200,
-            remaining_tokens=tokens,
-        ))
+        logs.append(
+            _log(
+                request_at=at,
+                was_blocked=False,
+                response_code=200,
+                remaining_tokens=tokens,
+            )
+        )
     return logs
 
 
@@ -134,23 +143,27 @@ def _path_attack() -> list[dict]:
     for i in range(180):
         at = now - timedelta(minutes=59) + timedelta(seconds=i * 20)
         blocked = i < 150
-        logs.append(_log(
-            request_at=at,
-            was_blocked=blocked,
-            response_code=429 if blocked else 200,
-            remaining_tokens=20 + (i % 30),
-            request_path="/api/attack",
-            reason="rate_limit" if blocked else None,
-        ))
+        logs.append(
+            _log(
+                request_at=at,
+                was_blocked=blocked,
+                response_code=429 if blocked else 200,
+                remaining_tokens=20 + (i % 30),
+                request_path="/api/attack",
+                reason="rate_limit" if blocked else None,
+            )
+        )
     for i in range(20):
         at = now - timedelta(minutes=59) + timedelta(seconds=i * 180)
-        logs.append(_log(
-            request_at=at,
-            was_blocked=False,
-            response_code=200,
-            remaining_tokens=90,
-            request_path="/api/normal",
-        ))
+        logs.append(
+            _log(
+                request_at=at,
+                was_blocked=False,
+                response_code=200,
+                remaining_tokens=90,
+                request_path="/api/normal",
+            )
+        )
     return logs
 
 
@@ -162,10 +175,10 @@ SCENARIOS: list[EvalScenario] = [
         description="Healthy traffic — low block rate, good token health, even path distribution",
         log_factory=_normal_traffic,
         expected={
-            "error_pattern":      {"severity": "none", "action": "monitor"},
+            "error_pattern": {"severity": "none", "action": "monitor"},
             "token_bucket_health": {"severity": "none", "action": "monitor"},
-            "top_paths":          {"severity": "none", "action": "monitor"},
-            "orchestrator":       {"severity": "none", "action": "monitor"},
+            "top_paths": {"severity": "none", "action": "monitor"},
+            "orchestrator": {"severity": "none", "action": "monitor"},
         },
     ),
     EvalScenario(
@@ -173,10 +186,10 @@ SCENARIOS: list[EvalScenario] = [
         description="10% 5xx errors + 50% 4xx — error_pattern should fire critical",
         log_factory=_high_error_rate,
         expected={
-            "error_pattern":      {"severity": "critical", "action": "block"},
-            "token_bucket_health": {"severity": "none",     "action": "monitor"},
-            "top_paths":          {"severity": "none",     "action": "monitor"},
-            "orchestrator":       {"severity": "critical", "action": "block"},
+            "error_pattern": {"severity": "critical", "action": "block"},
+            "token_bucket_health": {"severity": "none", "action": "monitor"},
+            "top_paths": {"severity": "none", "action": "monitor"},
+            "orchestrator": {"severity": "critical", "action": "block"},
         },
     ),
     EvalScenario(
@@ -184,10 +197,10 @@ SCENARIOS: list[EvalScenario] = [
         description="35% block rate, no 5xx — error_pattern high, no critical",
         log_factory=_high_block_rate,
         expected={
-            "error_pattern":      {"severity": "high",    "action": "throttle"},
-            "token_bucket_health": {"severity": "none",   "action": "monitor"},
-            "top_paths":          {"severity": "none",    "action": "monitor"},
-            "orchestrator":       {"severity": "high",    "action": "throttle"},
+            "error_pattern": {"severity": "high", "action": "throttle"},
+            "token_bucket_health": {"severity": "none", "action": "monitor"},
+            "top_paths": {"severity": "none", "action": "monitor"},
+            "orchestrator": {"severity": "high", "action": "throttle"},
         },
     ),
     EvalScenario(
@@ -195,10 +208,10 @@ SCENARIOS: list[EvalScenario] = [
         description="80% of requests at 0–2 remaining tokens — token agent should fire critical",
         log_factory=_token_depletion,
         expected={
-            "error_pattern":      {"severity": "none",     "action": "monitor"},
+            "error_pattern": {"severity": "none", "action": "monitor"},
             "token_bucket_health": {"severity": "critical", "action": "block"},
-            "top_paths":          {"severity": "none",     "action": "monitor"},
-            "orchestrator":       {"severity": "critical", "action": "block"},
+            "top_paths": {"severity": "none", "action": "monitor"},
+            "orchestrator": {"severity": "critical", "action": "block"},
         },
     ),
     EvalScenario(
@@ -206,10 +219,10 @@ SCENARIOS: list[EvalScenario] = [
         description="Single path with 83% block rate — top_paths critical, orchestrator critical",
         log_factory=_path_attack,
         expected={
-            "error_pattern":      {"severity": "high",     "action": "throttle"},
-            "token_bucket_health": {"severity": "none",    "action": "monitor"},
-            "top_paths":          {"severity": "critical", "action": "block"},
-            "orchestrator":       {"severity": "critical", "action": "block"},
+            "error_pattern": {"severity": "high", "action": "throttle"},
+            "token_bucket_health": {"severity": "none", "action": "monitor"},
+            "top_paths": {"severity": "critical", "action": "block"},
+            "orchestrator": {"severity": "critical", "action": "block"},
         },
     ),
 ]

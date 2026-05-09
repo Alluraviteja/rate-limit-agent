@@ -32,7 +32,8 @@ def _enabled_ids(rate_db: Session, app_info_id: Optional[int]) -> list[int]:
     if app_info_id:
         return [app_info_id]
     return [
-        a.id for a in rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
+        int(a.id)
+        for a in rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
     ]
 
 
@@ -56,24 +57,58 @@ def summary(
     def aq(model):
         return agent_db.query(model).filter(model.app_info_id.in_(ids))
 
-    total_agent_runs = aq(AgentResult).with_entities(func.count(AgentResult.id)).scalar() or 0
-    total_orch_runs  = aq(OrchestratorResult).with_entities(func.count(OrchestratorResult.id)).scalar() or 0
-    anomaly_count    = aq(OrchestratorResult).filter(OrchestratorResult.anomaly_detected.is_(True))\
-                         .with_entities(func.count(OrchestratorResult.id)).scalar() or 0
-    critical_count   = aq(OrchestratorResult).filter(OrchestratorResult.final_severity == "critical")\
-                         .with_entities(func.count(OrchestratorResult.id)).scalar() or 0
-    high_count       = aq(OrchestratorResult).filter(OrchestratorResult.final_severity == "high")\
-                         .with_entities(func.count(OrchestratorResult.id)).scalar() or 0
+    total_agent_runs = (
+        aq(AgentResult).with_entities(func.count(AgentResult.id)).scalar() or 0
+    )
+    total_orch_runs = (
+        aq(OrchestratorResult).with_entities(func.count(OrchestratorResult.id)).scalar()
+        or 0
+    )
+    anomaly_count = (
+        aq(OrchestratorResult)
+        .filter(OrchestratorResult.anomaly_detected.is_(True))
+        .with_entities(func.count(OrchestratorResult.id))
+        .scalar()
+        or 0
+    )
+    critical_count = (
+        aq(OrchestratorResult)
+        .filter(OrchestratorResult.final_severity == "critical")
+        .with_entities(func.count(OrchestratorResult.id))
+        .scalar()
+        or 0
+    )
+    high_count = (
+        aq(OrchestratorResult)
+        .filter(OrchestratorResult.final_severity == "high")
+        .with_entities(func.count(OrchestratorResult.id))
+        .scalar()
+        or 0
+    )
 
-    agent_tokens = aq(AgentResult).with_entities(func.sum(AgentResult.tokens_used)).scalar() or 0
-    orch_tokens  = aq(OrchestratorResult).with_entities(func.sum(OrchestratorResult.tokens_used)).scalar() or 0
+    agent_tokens = (
+        aq(AgentResult).with_entities(func.sum(AgentResult.tokens_used)).scalar() or 0
+    )
+    orch_tokens = (
+        aq(OrchestratorResult)
+        .with_entities(func.sum(OrchestratorResult.tokens_used))
+        .scalar()
+        or 0
+    )
     total_tokens = int(agent_tokens) + int(orch_tokens)
 
-    agent_cost = float(aq(AgentResult).with_entities(func.sum(AgentResult.cost_usd)).scalar() or 0)
-    orch_cost  = float(aq(OrchestratorResult).with_entities(func.sum(OrchestratorResult.cost_usd)).scalar() or 0)
+    agent_cost = float(
+        aq(AgentResult).with_entities(func.sum(AgentResult.cost_usd)).scalar() or 0
+    )
+    orch_cost = float(
+        aq(OrchestratorResult)
+        .with_entities(func.sum(OrchestratorResult.cost_usd))
+        .scalar()
+        or 0
+    )
     total_cost = round(agent_cost + orch_cost, 5)
 
-    last      = aq(OrchestratorResult).order_by(OrchestratorResult.run_at.desc()).first()
+    last = aq(OrchestratorResult).order_by(OrchestratorResult.run_at.desc()).first()
     baselines = [_row(get_or_create_baseline(agent_db, i)) for i in ids]
 
     return {
@@ -103,7 +138,9 @@ def timeline(
 ):
     ids = _enabled_ids(rate_db, app_info_id)
 
-    q = agent_db.query(OrchestratorResult).filter(OrchestratorResult.app_info_id.in_(ids))
+    q = agent_db.query(OrchestratorResult).filter(
+        OrchestratorResult.app_info_id.in_(ids)
+    )
 
     if filter == schemas.TimelineFilter.anomaly:
         q = q.filter(OrchestratorResult.anomaly_detected.is_(True))
@@ -124,12 +161,14 @@ def timeline(
     elif agent == schemas.AgentFilter.orchestrator:
         q = q.filter(OrchestratorResult.final_severity != "none")
 
-    orch_rows = q.order_by(OrchestratorResult.run_at.desc()).offset(offset).limit(limit).all()
+    orch_rows = (
+        q.order_by(OrchestratorResult.run_at.desc()).offset(offset).limit(limit).all()
+    )
 
     results = []
     for orch in orch_rows:
         window_start = orch.run_at - timedelta(seconds=30)
-        window_end   = orch.run_at + timedelta(seconds=30)
+        window_end = orch.run_at + timedelta(seconds=30)
         agents = (
             agent_db.query(AgentResult)
             .filter(
@@ -139,47 +178,49 @@ def timeline(
             )
             .all()
         )
-        by_name = {a.agent_name: a for a in agents}
-        e  = by_name.get("error_pattern")
-        t  = by_name.get("token_bucket_health")
-        p  = by_name.get("top_paths")
+        by_name = {str(a.agent_name): a for a in agents}
+        e = by_name.get("error_pattern")
+        t = by_name.get("token_bucket_health")
+        p = by_name.get("top_paths")
 
-        results.append({
-            "app_info_id": orch.app_info_id,
-            "run_at": orch.run_at.isoformat(),
-            "final_severity": orch.final_severity,
-            "anomaly_detected": orch.anomaly_detected,
-            "action": orch.action,
-            "reason": orch.reason,
-            "tokens_used": orch.tokens_used,
-            "cost_usd": float(orch.cost_usd or 0),
-            "error": {
-                "severity": e.severity if e else "none",
-                "block_rate_pct": float(e.block_rate_pct or 0) if e else 0,
-                "total_requests": e.total_requests if e else 0,
-                "blocked_requests": e.blocked_requests if e else 0,
-                "reason": e.reason if e else "",
-                "action": e.action if e else "monitor",
-                "tokens_used": e.tokens_used if e else None,
-            },
-            "token": {
-                "severity": t.severity if t else "none",
-                "avg_remaining": float(t.baseline_rps or 0) if t else 0,
-                "total_requests": t.total_requests if t else 0,
-                "reason": t.reason if t else "",
-                "action": t.action if t else "monitor",
-                "tokens_used": t.tokens_used if t else None,
-            },
-            "paths": {
-                "severity": p.severity if p else "none",
-                "block_rate_pct": float(p.block_rate_pct or 0) if p else 0,
-                "unique_paths": p.unique_ips if p else 0,
-                "total_requests": p.total_requests if p else 0,
-                "reason": p.reason if p else "",
-                "action": p.action if p else "monitor",
-                "tokens_used": p.tokens_used if p else None,
-            },
-        })
+        results.append(
+            {
+                "app_info_id": orch.app_info_id,
+                "run_at": orch.run_at.isoformat(),
+                "final_severity": orch.final_severity,
+                "anomaly_detected": orch.anomaly_detected,
+                "action": orch.action,
+                "reason": orch.reason,
+                "tokens_used": orch.tokens_used,
+                "cost_usd": float(orch.cost_usd or 0),
+                "error": {
+                    "severity": e.severity if e else "none",
+                    "block_rate_pct": float(e.block_rate_pct or 0) if e else 0,
+                    "total_requests": e.total_requests if e else 0,
+                    "blocked_requests": e.blocked_requests if e else 0,
+                    "reason": e.reason if e else "",
+                    "action": e.action if e else "monitor",
+                    "tokens_used": e.tokens_used if e else None,
+                },
+                "token": {
+                    "severity": t.severity if t else "none",
+                    "avg_remaining": float(t.baseline_rps or 0) if t else 0,
+                    "total_requests": t.total_requests if t else 0,
+                    "reason": t.reason if t else "",
+                    "action": t.action if t else "monitor",
+                    "tokens_used": t.tokens_used if t else None,
+                },
+                "paths": {
+                    "severity": p.severity if p else "none",
+                    "block_rate_pct": float(p.block_rate_pct or 0) if p else 0,
+                    "unique_paths": p.unique_ips if p else 0,
+                    "total_requests": p.total_requests if p else 0,
+                    "reason": p.reason if p else "",
+                    "action": p.action if p else "monitor",
+                    "tokens_used": p.tokens_used if p else None,
+                },
+            }
+        )
     return results
 
 
@@ -199,8 +240,8 @@ def cost(
     rate_db: Session = Depends(get_rate_db),
     agent_db: Session = Depends(get_agent_db),
 ):
-    ids         = _enabled_ids(rate_db, app_info_id)
-    today       = date.today()
+    ids = _enabled_ids(rate_db, app_info_id)
+    today = date.today()
     today_start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
 
     agent_names = ["error_pattern", "token_bucket_health", "top_paths", "orchestrator"]
@@ -226,33 +267,43 @@ def cost(
                 AgentResult.agent_name == name,
                 AgentResult.run_at >= today_start,
             )
-        cnt, tok, cst = q.first()
-        by_agent.append({
-            "agent_name": name,
-            "runs_today": int(cnt or 0),
-            "tokens_today": int(tok or 0),
-            "cost_today": round(float(cst or 0), 5),
-        })
+        cnt, tok, cst = q.first() or (0, 0, 0)
+        by_agent.append(
+            {
+                "agent_name": name,
+                "runs_today": int(cnt or 0),
+                "tokens_today": int(tok or 0),
+                "cost_today": round(float(cst or 0), 5),
+            }
+        )
 
     daily_series = []
     for i in range(6, -1, -1):
         day_start = today_start - timedelta(days=i)
-        day_end   = day_start + timedelta(days=1)
+        day_end = day_start + timedelta(days=1)
         entry: dict = {"date": (today - timedelta(days=i)).isoformat()}
         for name in agent_names:
             if name == "orchestrator":
-                val = agent_db.query(func.sum(OrchestratorResult.cost_usd)).filter(
-                    OrchestratorResult.app_info_id.in_(ids),
-                    OrchestratorResult.run_at >= day_start,
-                    OrchestratorResult.run_at < day_end,
-                ).scalar()
+                val = (
+                    agent_db.query(func.sum(OrchestratorResult.cost_usd))
+                    .filter(
+                        OrchestratorResult.app_info_id.in_(ids),
+                        OrchestratorResult.run_at >= day_start,
+                        OrchestratorResult.run_at < day_end,
+                    )
+                    .scalar()
+                )
             else:
-                val = agent_db.query(func.sum(AgentResult.cost_usd)).filter(
-                    AgentResult.app_info_id.in_(ids),
-                    AgentResult.agent_name == name,
-                    AgentResult.run_at >= day_start,
-                    AgentResult.run_at < day_end,
-                ).scalar()
+                val = (
+                    agent_db.query(func.sum(AgentResult.cost_usd))
+                    .filter(
+                        AgentResult.app_info_id.in_(ids),
+                        AgentResult.agent_name == name,
+                        AgentResult.run_at >= day_start,
+                        AgentResult.run_at < day_end,
+                    )
+                    .scalar()
+                )
             entry[name] = round(float(val or 0), 5)
         daily_series.append(entry)
 

@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 
 from ..models import AgentResult, OrchestratorResult
 from ..providers import get_provider
-from ..tools.memory_service import get_or_create_baseline, get_recent_context, update_baseline
+from ..tools.memory_service import (
+    get_or_create_baseline,
+    get_recent_context,
+    update_baseline,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +88,8 @@ class Orchestrator:
             response = _provider.complete_with_retry(_SYSTEM, user_msg, max_tokens=150)
 
             parsed = _parse(response.content)
-            inp  = response.input_tokens
-            out  = response.output_tokens
+            inp = response.input_tokens
+            out = response.output_tokens
             cost = response.cost_usd
 
             result = OrchestratorResult(

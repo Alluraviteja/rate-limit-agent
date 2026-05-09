@@ -1,5 +1,4 @@
 """Router tests: input validation, happy-path responses, and response shape."""
-import pytest
 
 
 class TestHealthEndpoints:
