@@ -115,6 +115,7 @@ jobs:
                 --name "$CONTAINER" \
                 --restart unless-stopped \
                 --network "${DOCKER_NETWORK:-my-app-network}" \
+                --add-host host.docker.internal:host-gateway \
                 -e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY" \
                 -e RATE_LIMITER_DB="$RATE_LIMITER_DB" \
                 -e AGENT_DB_URL="$AGENT_DB_URL" \
