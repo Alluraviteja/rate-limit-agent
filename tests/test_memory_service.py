@@ -1,7 +1,8 @@
-import pytest
-
 from rate_limiter_agents.models import AgentResult, BaselineMemory
-from rate_limiter_agents.tools.memory_service import get_or_create_baseline, update_baseline
+from rate_limiter_agents.tools.memory_service import (
+    get_or_create_baseline,
+    update_baseline,
+)
 
 
 class TestGetOrCreateBaseline:
@@ -36,13 +37,17 @@ class TestUpdateBaseline:
 
     def test_spike_threshold_low_block_rate(self, agent_db):
         get_or_create_baseline(agent_db, app_info_id=201)
-        update_baseline(agent_db, 201, [AgentResult(app_info_id=201, block_rate_pct=1.0)])
+        update_baseline(
+            agent_db, 201, [AgentResult(app_info_id=201, block_rate_pct=1.0)]
+        )
         b = agent_db.query(BaselineMemory).filter_by(app_info_id=201).first()
         assert float(b.spike_threshold) == 2.5  # avg_block_rate_7d < 5.0
 
     def test_spike_threshold_high_block_rate(self, agent_db):
         get_or_create_baseline(agent_db, app_info_id=202)
-        update_baseline(agent_db, 202, [AgentResult(app_info_id=202, block_rate_pct=25.0)])
+        update_baseline(
+            agent_db, 202, [AgentResult(app_info_id=202, block_rate_pct=25.0)]
+        )
         b = agent_db.query(BaselineMemory).filter_by(app_info_id=202).first()
         assert float(b.spike_threshold) == 4.0  # avg_block_rate_7d > 20.0
 

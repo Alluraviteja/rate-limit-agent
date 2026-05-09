@@ -26,6 +26,7 @@ class AgentFilter(str, Enum):
 
 # ── Agents router ─────────────────────────────────────────────────────────────
 
+
 class AgentResultOut(BaseModel):
     id: int
     app_info_id: Optional[int] = None
@@ -75,6 +76,7 @@ class RunResultOut(BaseModel):
 
 
 # ── Dashboard router ──────────────────────────────────────────────────────────
+
 
 class AppOut(BaseModel):
     id: int
@@ -171,6 +173,7 @@ class CostOut(BaseModel):
 
 
 # ── Evals router ──────────────────────────────────────────────────────────────
+
 
 class EvalCheckOut(BaseModel):
     scenario: str

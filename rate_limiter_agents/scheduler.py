@@ -19,12 +19,16 @@ def execute_agent_pipeline(
     rate_db, agent_db, app_info_id: int
 ) -> tuple[AgentResult, AgentResult, AgentResult, OrchestratorResult]:
     app_info = rate_db.query(AppInfo).filter(AppInfo.id == app_info_id).first()
-    per_ip   = bool(app_info.per_ip_address) if app_info and app_info.per_ip_address is not None else False
+    per_ip = (
+        bool(app_info.per_ip_address)
+        if app_info and app_info.per_ip_address is not None
+        else False
+    )
 
-    error  = ErrorPatternAgent().analyze(rate_db, agent_db, app_info_id, per_ip)
-    token  = TokenBucketHealthAgent().analyze(rate_db, agent_db, app_info_id, per_ip)
-    paths  = TopPathsAgent().analyze(rate_db, agent_db, app_info_id, per_ip)
-    orch   = Orchestrator().run(agent_db, app_info_id, error, token, paths, per_ip)
+    error = ErrorPatternAgent().analyze(rate_db, agent_db, app_info_id, per_ip)
+    token = TokenBucketHealthAgent().analyze(rate_db, agent_db, app_info_id, per_ip)
+    paths = TopPathsAgent().analyze(rate_db, agent_db, app_info_id, per_ip)
+    orch = Orchestrator().run(agent_db, app_info_id, error, token, paths, per_ip)
     return error, token, paths, orch
 
 
@@ -46,7 +50,7 @@ def run_daily_evals() -> None:
 
 def run_all_agents() -> None:
     """Fetches all enabled apps from app_info on every run."""
-    rate_db  = RateLimiterScopedSession()
+    rate_db = RateLimiterScopedSession()
     agent_db = AgentScopedSession()
     try:
         app_infos = rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
@@ -56,7 +60,9 @@ def run_all_agents() -> None:
 
         for app_info in app_infos:
             try:
-                _, _, _, orch = execute_agent_pipeline(rate_db, agent_db, int(app_info.id))
+                _, _, _, orch = execute_agent_pipeline(
+                    rate_db, agent_db, int(app_info.id)
+                )
                 logger.info(
                     "app_info_id=%s (%s) — severity=%s action=%s",
                     app_info.id,

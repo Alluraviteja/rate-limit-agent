@@ -1,7 +1,5 @@
 from types import SimpleNamespace
 
-import pytest
-
 from rate_limiter_agents.tools.metrics_aggregator import (
     build_error_summary,
     build_token_health_summary,

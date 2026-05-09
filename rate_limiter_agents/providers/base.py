@@ -10,13 +10,15 @@ from enum import Enum
 logger = logging.getLogger(__name__)
 
 # Exception class names that are safe to retry across both Anthropic and OpenAI SDKs
-_RETRYABLE_NAMES = frozenset({
-    "RateLimitError",
-    "APITimeoutError",
-    "InternalServerError",
-    "ServiceUnavailableError",
-    "APIConnectionError",
-})
+_RETRYABLE_NAMES = frozenset(
+    {
+        "RateLimitError",
+        "APITimeoutError",
+        "InternalServerError",
+        "ServiceUnavailableError",
+        "APIConnectionError",
+    }
+)
 
 
 class LLMProviderType(str, Enum):
@@ -40,7 +42,9 @@ class BaseLLMProvider(ABC):
     def complete(self, system: str, user: str, max_tokens: int) -> LLMResponse:
         """Send a system+user prompt and return a normalized response."""
 
-    def complete_with_retry(self, system: str, user: str, max_tokens: int) -> LLMResponse:
+    def complete_with_retry(
+        self, system: str, user: str, max_tokens: int
+    ) -> LLMResponse:
         """complete() with exponential-backoff retry on transient provider errors."""
         last_exc: Exception | None = None
         for attempt in range(self._max_retries):
@@ -51,7 +55,7 @@ class BaseLLMProvider(ABC):
                     raise
                 last_exc = exc
                 if attempt < self._max_retries - 1:
-                    delay = self._base_delay * (2 ** attempt) + random.uniform(0, 1)
+                    delay = self._base_delay * (2**attempt) + random.uniform(0, 1)
                     logger.warning(
                         "LLM call failed attempt %d/%d (%s), retrying in %.1fs",
                         attempt + 1,

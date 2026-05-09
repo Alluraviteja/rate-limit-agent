@@ -71,15 +71,39 @@ def _run_scenario(
         app_id = 9999
 
         error_res = ErrorPatternAgent().analyze(rate_session, agent_session, app_id)
-        token_res = TokenBucketHealthAgent().analyze(rate_session, agent_session, app_id)
+        token_res = TokenBucketHealthAgent().analyze(
+            rate_session, agent_session, app_id
+        )
         paths_res = TopPathsAgent().analyze(rate_session, agent_session, app_id)
-        orch_res = Orchestrator().run(agent_session, app_id, error_res, token_res, paths_res)
+        orch_res = Orchestrator().run(
+            agent_session, app_id, error_res, token_res, paths_res
+        )
 
         actuals = {
-            "error_pattern":       (error_res.severity, error_res.action, error_res.tokens_used, error_res.cost_usd),
-            "token_bucket_health": (token_res.severity, token_res.action, token_res.tokens_used, token_res.cost_usd),
-            "top_paths":           (paths_res.severity, paths_res.action, paths_res.tokens_used, paths_res.cost_usd),
-            "orchestrator":        (orch_res.final_severity, orch_res.action, orch_res.tokens_used, orch_res.cost_usd),
+            "error_pattern": (
+                error_res.severity,
+                error_res.action,
+                error_res.tokens_used,
+                error_res.cost_usd,
+            ),
+            "token_bucket_health": (
+                token_res.severity,
+                token_res.action,
+                token_res.tokens_used,
+                token_res.cost_usd,
+            ),
+            "top_paths": (
+                paths_res.severity,
+                paths_res.action,
+                paths_res.tokens_used,
+                paths_res.cost_usd,
+            ),
+            "orchestrator": (
+                orch_res.final_severity,
+                orch_res.action,
+                orch_res.tokens_used,
+                orch_res.cost_usd,
+            ),
         }
 
         eval_results: list[EvalRunResult] = []

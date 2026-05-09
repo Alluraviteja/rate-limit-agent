@@ -10,14 +10,19 @@ os.environ.setdefault("LLM_MODEL", "claude-haiku-4-5-20251001")
 os.environ.setdefault("CORS_ORIGINS", "http://localhost:8000")
 os.environ.setdefault("AGENT_INTERVAL_MINUTES", "15")
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.dialects.sqlite import base as _sqlite_base
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.dialects.sqlite import base as _sqlite_base  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
 
-from rate_limiter_agents.database import AgentBase, RateLimiterBase, get_agent_db, get_rate_db
+from rate_limiter_agents.database import (
+    AgentBase,
+    RateLimiterBase,
+    get_agent_db,
+    get_rate_db,
+)  # noqa: E402
 
 # SQLite only auto-generates PK values for INTEGER PRIMARY KEY, not BIGINT PRIMARY KEY.
 # Patch the SQLite type compiler so all BIGINT columns render as INTEGER in tests.

@@ -38,7 +38,11 @@ ACTION: monitor/alert/throttle/block"""
 
 class TopPathsAgent:
     def analyze(
-        self, rate_db: Session, agent_db: Session, app_info_id: int, per_ip_address: bool = False
+        self,
+        rate_db: Session,
+        agent_db: Session,
+        app_info_id: int,
+        per_ip_address: bool = False,
     ) -> AgentResult:
         try:
             cutoff = datetime.now(timezone.utc) - timedelta(minutes=60)
@@ -53,26 +57,37 @@ class TopPathsAgent:
             )
 
             summary = build_top_paths_summary(logs, per_ip_address=per_ip_address)
-            mode = "per-IP (each client IP has its own token bucket)" if per_ip_address else "shared (all clients share one token bucket)"
+            mode = (
+                "per-IP (each client IP has its own token bucket)"
+                if per_ip_address
+                else "shared (all clients share one token bucket)"
+            )
             user_msg = f"Rate limiting mode: {mode}\nTop paths traffic metrics (last 60 min):\n{json.dumps(summary, indent=2)}"
 
             response = _provider.complete_with_retry(_SYSTEM, user_msg, max_tokens=200)
 
             parsed = _parse(response.content)
-            inp  = response.input_tokens
-            out  = response.output_tokens
+            inp = response.input_tokens
+            out = response.output_tokens
             cost = response.cost_usd
 
-            top = summary["top_paths_by_traffic"][0] if summary["top_paths_by_traffic"] else {}
+            top = (
+                summary["top_paths_by_traffic"][0]
+                if summary["top_paths_by_traffic"]
+                else {}
+            )
 
             result = AgentResult(
                 app_info_id=app_info_id,
                 agent_name="top_paths",
                 anomaly_detected=parsed.get("ANOMALY", "NO").upper() == "YES",
                 severity=parsed.get("SEVERITY", "none").lower(),
-                block_rate_pct=_num(parsed.get("BLOCK_RATE")) or top.get("block_rate_pct"),
+                block_rate_pct=_num(parsed.get("BLOCK_RATE"))
+                or top.get("block_rate_pct"),
                 total_requests=summary["total_requests"],
-                blocked_requests=sum(p["blocked"] for p in summary["top_paths_by_traffic"]),
+                blocked_requests=sum(
+                    p["blocked"] for p in summary["top_paths_by_traffic"]
+                ),
                 unique_ips=summary["unique_paths"],
                 reason=parsed.get("REASON", ""),
                 action=parsed.get("ACTION", "monitor").lower(),

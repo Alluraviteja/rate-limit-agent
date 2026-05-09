@@ -50,8 +50,12 @@ def update_baseline(
     n = int(baseline.sample_count or 0)
 
     peak_rps_vals = [float(r.peak_rps) for r in agent_results if r.peak_rps is not None]
-    block_rate_vals = [float(r.block_rate_pct) for r in agent_results if r.block_rate_pct is not None]
-    bot_ratio_vals = [float(r.bot_ratio_pct) for r in agent_results if r.bot_ratio_pct is not None]
+    block_rate_vals = [
+        float(r.block_rate_pct) for r in agent_results if r.block_rate_pct is not None
+    ]
+    bot_ratio_vals = [
+        float(r.bot_ratio_pct) for r in agent_results if r.bot_ratio_pct is not None
+    ]
 
     if peak_rps_vals:
         new_val = sum(peak_rps_vals) / len(peak_rps_vals)
@@ -59,11 +63,15 @@ def update_baseline(
 
     if block_rate_vals:
         new_val = sum(block_rate_vals) / len(block_rate_vals)
-        baseline.avg_block_rate_7d = (float(baseline.avg_block_rate_7d) * n + new_val) / (n + 1)  # type: ignore[assignment]
+        baseline.avg_block_rate_7d = (
+            float(baseline.avg_block_rate_7d) * n + new_val
+        ) / (n + 1)  # type: ignore[assignment]
 
     if bot_ratio_vals:
         new_val = sum(bot_ratio_vals) / len(bot_ratio_vals)
-        baseline.avg_bot_ratio_7d = (float(baseline.avg_bot_ratio_7d) * n + new_val) / (n + 1)  # type: ignore[assignment]
+        baseline.avg_bot_ratio_7d = (float(baseline.avg_bot_ratio_7d) * n + new_val) / (
+            n + 1
+        )  # type: ignore[assignment]
 
     avg_block = float(baseline.avg_block_rate_7d)
     if avg_block < 5.0:

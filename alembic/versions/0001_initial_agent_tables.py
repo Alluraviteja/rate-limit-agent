@@ -5,6 +5,7 @@ Revises:
 Create Date: 2026-05-02
 
 """
+
 from __future__ import annotations
 
 from typing import Sequence, Union
@@ -62,8 +63,12 @@ def upgrade() -> None:
         sa.Column("run_at", sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index("ix_orchestrator_results_app_info_id", "orchestrator_results", ["app_info_id"])
-    op.create_index("ix_orchestrator_results_run_at", "orchestrator_results", ["run_at"])
+    op.create_index(
+        "ix_orchestrator_results_app_info_id", "orchestrator_results", ["app_info_id"]
+    )
+    op.create_index(
+        "ix_orchestrator_results_run_at", "orchestrator_results", ["run_at"]
+    )
 
     op.create_table(
         "baseline_memory",

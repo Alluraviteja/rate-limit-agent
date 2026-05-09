@@ -36,7 +36,8 @@ def _enabled_ids(rate_db: Session, app_info_id: Optional[int]) -> list[int]:
     if app_info_id:
         return [app_info_id]
     return [
-        int(a.id) for a in rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
+        int(a.id)
+        for a in rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
     ]
 
 
@@ -51,13 +52,15 @@ def run_agents(
     results = []
     for aid in ids:
         error, token, paths, orch = execute_agent_pipeline(rate_db, agent_db, aid)
-        results.append({
-            "app_info_id": aid,
-            "error": _to_dict(error),
-            "token": _to_dict(token),
-            "paths": _to_dict(paths),
-            "orchestrator": _to_dict(orch),
-        })
+        results.append(
+            {
+                "app_info_id": aid,
+                "error": _to_dict(error),
+                "token": _to_dict(token),
+                "paths": _to_dict(paths),
+                "orchestrator": _to_dict(orch),
+            }
+        )
     return results
 
 
@@ -69,7 +72,7 @@ def get_history(
     rate_db: Session = Depends(get_rate_db),
     agent_db: Session = Depends(get_agent_db),
 ):
-    ids  = _enabled_ids(rate_db, app_info_id)
+    ids = _enabled_ids(rate_db, app_info_id)
     rows = (
         agent_db.query(AgentResult)
         .filter(AgentResult.app_info_id.in_(ids))

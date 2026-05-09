@@ -1,5 +1,4 @@
 """Tests for the _parse / _num helpers shared across all agent modules."""
-import pytest
 
 from rate_limiter_agents.agents.error_pattern import _num, _parse
 
