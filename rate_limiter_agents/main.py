@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from pathlib import Path
 
@@ -20,7 +21,8 @@ from alembic import command as alembic_command  # noqa: E402
 from alembic.config import Config as AlembicConfig  # noqa: E402
 
 from . import config  # noqa: E402
-from .database import agent_engine, rate_limiter_engine  # noqa: E402
+from .database import agent_engine  # noqa: E402
+from .tools.mcp_client import get_mcp  # noqa: E402
 from .logging_config import request_id_var, setup_logging  # noqa: E402
 from .routers import agents as agents_router  # noqa: E402
 from .routers import dashboard as dashboard_router  # noqa: E402
@@ -80,19 +82,26 @@ async def health():
 async def health_ready():
     checks: dict[str, str] = {}
 
-    for name, engine in (
-        ("rate_limiter_db", rate_limiter_engine),
-        ("agent_db", agent_engine),
-    ):
-        try:
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-            checks[name] = "ok"
-        except Exception as exc:
-            logging.error("DB health check failed for %s: %s", name, exc)
-            checks[name] = f"error: {exc}"
+    try:
+        with agent_engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        checks["agent_db"] = "ok"
+    except Exception as exc:
+        logging.error("DB health check failed for agent_db: %s", exc)
+        checks["agent_db"] = f"error: {exc}"
 
-    status = "ok" if all(v == "ok" for v in checks.values()) else "degraded"
+    mcp = get_mcp()
+    if mcp:
+        try:
+            # asyncio.to_thread: MCPClient._run calls asyncio.run() internally,
+            # which cannot be called from a running event loop directly.
+            health = await asyncio.to_thread(mcp.get_service_health)
+            checks["mcp"] = health.get("status", "unknown")
+        except Exception as exc:
+            logging.error("MCP health check failed: %s", exc)
+            checks["mcp"] = f"error: {exc}"
+
+    status = "ok" if all(v in ("ok", "healthy") for v in checks.values()) else "degraded"
     code = 200 if status == "ok" else 503
     return JSONResponse(status_code=code, content={"status": status, "checks": checks})
 

@@ -8,9 +8,10 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ..database import get_agent_db, get_rate_db
-from ..models import AgentResult, AppInfo, OrchestratorResult
+from ..database import get_agent_db
+from ..models import AgentResult, OrchestratorResult
 from ..tools.memory_service import get_or_create_baseline
+from ..tools.mcp_client import get_mcp
 from .. import schemas
 
 router = APIRouter()
@@ -28,31 +29,29 @@ def _row(obj) -> dict:
     return {c.name: _val(getattr(obj, c.name)) for c in obj.__table__.columns}
 
 
-def _enabled_ids(rate_db: Session, app_info_id: Optional[int]) -> list[int]:
+def _enabled_ids(app_info_id: Optional[int]) -> list[int]:
     if app_info_id:
         return [app_info_id]
-    return [
-        int(a.id)
-        for a in rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
-    ]
+    mcp = get_mcp()
+    if mcp is None:
+        return []
+    return [int(a["id"]) for a in mcp.list_apps()]
 
 
 @router.get("/apps", response_model=list[schemas.AppOut])
-def apps(rate_db: Session = Depends(get_rate_db)):
-    rows = rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
-    return [
-        {"id": a.id, "service_name": a.service_name, "description": a.description}
-        for a in rows
-    ]
+def apps():
+    mcp = get_mcp()
+    if mcp is None:
+        return []
+    return mcp.list_apps()
 
 
 @router.get("/summary", response_model=schemas.SummaryOut)
 def summary(
     app_info_id: Optional[int] = Query(None, gt=0),
-    rate_db: Session = Depends(get_rate_db),
     agent_db: Session = Depends(get_agent_db),
 ):
-    ids = _enabled_ids(rate_db, app_info_id)
+    ids = _enabled_ids(app_info_id)
 
     def aq(model):
         return agent_db.query(model).filter(model.app_info_id.in_(ids))
@@ -133,10 +132,9 @@ def timeline(
     agent: schemas.AgentFilter = Query(schemas.AgentFilter.all),
     limit: int = Query(15, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    rate_db: Session = Depends(get_rate_db),
     agent_db: Session = Depends(get_agent_db),
 ):
-    ids = _enabled_ids(rate_db, app_info_id)
+    ids = _enabled_ids(app_info_id)
 
     q = agent_db.query(OrchestratorResult).filter(
         OrchestratorResult.app_info_id.in_(ids)
@@ -227,20 +225,18 @@ def timeline(
 @router.get("/baseline", response_model=list[schemas.BaselineOut])
 def baseline(
     app_info_id: Optional[int] = Query(None, gt=0),
-    rate_db: Session = Depends(get_rate_db),
     agent_db: Session = Depends(get_agent_db),
 ):
-    ids = _enabled_ids(rate_db, app_info_id)
+    ids = _enabled_ids(app_info_id)
     return [_row(get_or_create_baseline(agent_db, i)) for i in ids]
 
 
 @router.get("/cost", response_model=schemas.CostOut)
 def cost(
     app_info_id: Optional[int] = Query(None, gt=0),
-    rate_db: Session = Depends(get_rate_db),
     agent_db: Session = Depends(get_agent_db),
 ):
-    ids = _enabled_ids(rate_db, app_info_id)
+    ids = _enabled_ids(app_info_id)
     today = date.today()
     today_start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
 
