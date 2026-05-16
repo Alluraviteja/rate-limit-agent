@@ -65,7 +65,8 @@ class TopPathsAgent:
                 agent_name="top_paths",
                 anomaly_detected=parsed.get("ANOMALY", "NO").upper() == "YES",
                 severity=parsed.get("SEVERITY", "none").lower(),
-                block_rate_pct=_num(parsed.get("BLOCK_RATE")) or top.get("block_rate_pct"),
+                block_rate_pct=_num(parsed.get("BLOCK_RATE"))
+                or top.get("block_rate_pct"),
                 total_requests=summary.get("total_requests"),
                 blocked_requests=sum(p.get("blocked", 0) for p in top_paths),
                 unique_ips=summary.get("unique_paths"),

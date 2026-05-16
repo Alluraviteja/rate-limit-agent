@@ -74,10 +74,18 @@ def _run_scenario(
         token_summary = build_token_health_summary(logs, per_ip_address=per_ip)
         paths_summary = build_top_paths_summary(logs, per_ip_address=per_ip)
 
-        error_res = ErrorPatternAgent().analyze(agent_session, app_id, per_ip, error_summary)
-        token_res = TokenBucketHealthAgent().analyze(agent_session, app_id, per_ip, token_summary)
-        paths_res = TopPathsAgent().analyze(agent_session, app_id, per_ip, paths_summary)
-        orch_res = Orchestrator().run(agent_session, app_id, error_res, token_res, paths_res, per_ip)
+        error_res = ErrorPatternAgent().analyze(
+            agent_session, app_id, per_ip, error_summary
+        )
+        token_res = TokenBucketHealthAgent().analyze(
+            agent_session, app_id, per_ip, token_summary
+        )
+        paths_res = TopPathsAgent().analyze(
+            agent_session, app_id, per_ip, paths_summary
+        )
+        orch_res = Orchestrator().run(
+            agent_session, app_id, error_res, token_res, paths_res, per_ip
+        )
 
         actuals = {
             "error_pattern": (

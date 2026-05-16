@@ -101,7 +101,9 @@ async def health_ready():
             logging.error("MCP health check failed: %s", exc)
             checks["mcp"] = f"error: {exc}"
 
-    status = "ok" if all(v in ("ok", "healthy") for v in checks.values()) else "degraded"
+    status = (
+        "ok" if all(v in ("ok", "healthy") for v in checks.values()) else "degraded"
+    )
     code = 200 if status == "ok" else 503
     return JSONResponse(status_code=code, content={"status": status, "checks": checks})
 

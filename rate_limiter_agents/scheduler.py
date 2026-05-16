@@ -23,15 +23,21 @@ def execute_agent_pipeline(
     per_ip = bool(app.get("per_ip_address", False))
 
     error = ErrorPatternAgent().analyze(
-        agent_db, app_info_id, per_ip,
+        agent_db,
+        app_info_id,
+        per_ip,
         ds.get_error_summary(app_info_id, 15, per_ip=per_ip),
     )
     token = TokenBucketHealthAgent().analyze(
-        agent_db, app_info_id, per_ip,
+        agent_db,
+        app_info_id,
+        per_ip,
         ds.get_token_health_summary(app_info_id, 15, per_ip=per_ip),
     )
     paths = TopPathsAgent().analyze(
-        agent_db, app_info_id, per_ip,
+        agent_db,
+        app_info_id,
+        per_ip,
         ds.get_top_paths_summary(app_info_id, 60, per_ip=per_ip),
     )
     orch = Orchestrator().run(agent_db, app_info_id, error, token, paths, per_ip)

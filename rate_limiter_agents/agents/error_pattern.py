@@ -61,7 +61,8 @@ class ErrorPatternAgent:
                 agent_name="error_pattern",
                 anomaly_detected=parsed.get("ANOMALY", "NO").upper() == "YES",
                 severity=parsed.get("SEVERITY", "none").lower(),
-                block_rate_pct=_num(parsed.get("BLOCK_RATE")) or summary.get("block_rate_pct"),
+                block_rate_pct=_num(parsed.get("BLOCK_RATE"))
+                or summary.get("block_rate_pct"),
                 total_requests=summary.get("total_requests"),
                 blocked_requests=summary.get("blocked_requests"),
                 reason=parsed.get("REASON", ""),

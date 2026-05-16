@@ -55,7 +55,9 @@ class MCPClient:
 
     # ── internal async helpers ───────────────────────────────────────────────
 
-    async def _call(self, tool_name: str, arguments: dict[str, Any], attempt: int = 0) -> Any:
+    async def _call(
+        self, tool_name: str, arguments: dict[str, Any], attempt: int = 0
+    ) -> Any:
         try:
             async with sse_client(
                 self._sse_url, headers=self._headers, timeout=self._timeout
@@ -68,7 +70,10 @@ class MCPClient:
             if attempt < 1:
                 logger.warning(
                     "MCP %r failed (attempt %d), retrying in %.1fs: %s",
-                    tool_name, attempt + 1, _RETRY_DELAY, exc,
+                    tool_name,
+                    attempt + 1,
+                    _RETRY_DELAY,
+                    exc,
                 )
                 await asyncio.sleep(_RETRY_DELAY)
                 return await self._call(tool_name, arguments, attempt + 1)
@@ -93,7 +98,9 @@ class MCPClient:
             if attempt < 1:
                 logger.warning(
                     "MCP batch call failed (attempt %d), retrying in %.1fs: %s",
-                    attempt + 1, _RETRY_DELAY, exc,
+                    attempt + 1,
+                    _RETRY_DELAY,
+                    exc,
                 )
                 await asyncio.sleep(_RETRY_DELAY)
                 return await self._call_many(calls, attempt + 1)
@@ -107,12 +114,23 @@ class MCPClient:
     def fetch_pipeline_data(self, app_info_id: int) -> dict:
         """Fetch app detail + all three summaries in one SSE session."""
         app, error_summary, token_summary, paths_summary = self._run(
-            self._call_many([
-                ("get_app", {"appInfoId": app_info_id}),
-                ("get_error_summary", {"appInfoId": app_info_id, "windowMinutes": 15}),
-                ("get_token_health_summary", {"appInfoId": app_info_id, "windowMinutes": 15}),
-                ("get_top_paths_summary", {"appInfoId": app_info_id, "windowMinutes": 60}),
-            ])
+            self._call_many(
+                [
+                    ("get_app", {"appInfoId": app_info_id}),
+                    (
+                        "get_error_summary",
+                        {"appInfoId": app_info_id, "windowMinutes": 15},
+                    ),
+                    (
+                        "get_token_health_summary",
+                        {"appInfoId": app_info_id, "windowMinutes": 15},
+                    ),
+                    (
+                        "get_top_paths_summary",
+                        {"appInfoId": app_info_id, "windowMinutes": 60},
+                    ),
+                ]
+            )
         )
         return {
             "app": app,

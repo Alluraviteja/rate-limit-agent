@@ -62,7 +62,8 @@ class TokenBucketHealthAgent:
                 anomaly_detected=parsed.get("ANOMALY", "NO").upper() == "YES",
                 severity=parsed.get("SEVERITY", "none").lower(),
                 baseline_rps=(
-                    _num(parsed.get("AVG_REMAINING")) or summary.get("avg_remaining_tokens")
+                    _num(parsed.get("AVG_REMAINING"))
+                    or summary.get("avg_remaining_tokens")
                 ),
                 total_requests=summary.get("total_requests"),
                 reason=parsed.get("REASON", ""),
