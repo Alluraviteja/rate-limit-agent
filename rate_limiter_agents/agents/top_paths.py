@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from ..models import AgentResult, RateLimitLog
+from ..models import AgentResult
 from ..providers import get_provider
-from ..tools.metrics_aggregator import build_top_paths_summary
 
 logger = logging.getLogger(__name__)
 
@@ -39,43 +38,27 @@ ACTION: monitor/alert/throttle/block"""
 class TopPathsAgent:
     def analyze(
         self,
-        rate_db: Session,
         agent_db: Session,
         app_info_id: int,
-        per_ip_address: bool = False,
+        per_ip_address: bool,
+        summary: dict,
     ) -> AgentResult:
         try:
-            cutoff = datetime.now(timezone.utc) - timedelta(minutes=60)
-            logs = (
-                rate_db.query(RateLimitLog)
-                .filter(
-                    RateLimitLog.app_info_id == app_info_id,
-                    RateLimitLog.request_at >= cutoff,
-                )
-                .limit(5000)
-                .all()
-            )
-
-            summary = build_top_paths_summary(logs, per_ip_address=per_ip_address)
             mode = (
                 "per-IP (each client IP has its own token bucket)"
                 if per_ip_address
                 else "shared (all clients share one token bucket)"
             )
-            user_msg = f"Rate limiting mode: {mode}\nTop paths traffic metrics (last 60 min):\n{json.dumps(summary, indent=2)}"
+            user_msg = (
+                f"Rate limiting mode: {mode}\n"
+                f"Top paths traffic metrics (last 60 min):\n{json.dumps(summary, indent=2)}"
+            )
 
             response = _provider.complete_with_retry(_SYSTEM, user_msg, max_tokens=200)
 
             parsed = _parse(response.content)
-            inp = response.input_tokens
-            out = response.output_tokens
-            cost = response.cost_usd
-
-            top = (
-                summary["top_paths_by_traffic"][0]
-                if summary["top_paths_by_traffic"]
-                else {}
-            )
+            top_paths = summary.get("top_paths_by_traffic") or []
+            top = top_paths[0] if top_paths else {}
 
             result = AgentResult(
                 app_info_id=app_info_id,
@@ -84,15 +67,13 @@ class TopPathsAgent:
                 severity=parsed.get("SEVERITY", "none").lower(),
                 block_rate_pct=_num(parsed.get("BLOCK_RATE"))
                 or top.get("block_rate_pct"),
-                total_requests=summary["total_requests"],
-                blocked_requests=sum(
-                    p["blocked"] for p in summary["top_paths_by_traffic"]
-                ),
-                unique_ips=summary["unique_paths"],
+                total_requests=summary.get("total_requests"),
+                blocked_requests=sum(p.get("blocked", 0) for p in top_paths),
+                unique_ips=summary.get("unique_paths"),
                 reason=parsed.get("REASON", ""),
                 action=parsed.get("ACTION", "monitor").lower(),
-                tokens_used=inp + out,
-                cost_usd=round(cost, 8),
+                tokens_used=response.input_tokens + response.output_tokens,
+                cost_usd=round(response.cost_usd, 8),
                 run_at=datetime.now(timezone.utc),
             )
         except Exception as e:

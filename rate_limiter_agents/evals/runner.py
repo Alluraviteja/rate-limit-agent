@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -11,8 +12,13 @@ from ..agents.error_pattern import ErrorPatternAgent
 from ..agents.orchestrator import Orchestrator
 from ..agents.token_bucket_health import TokenBucketHealthAgent
 from ..agents.top_paths import TopPathsAgent
-from ..database import AgentBase, RateLimiterBase
-from ..models import EvalRunResult, RateLimitLog
+from ..database import AgentBase
+from ..models import EvalRunResult
+from ..tools.metrics_aggregator import (
+    build_error_summary,
+    build_token_health_summary,
+    build_top_paths_summary,
+)
 from .scenarios import SCENARIOS, EvalScenario
 
 logger = logging.getLogger(__name__)
@@ -54,29 +60,31 @@ def _run_scenario(
     run_id: str,
     run_at: datetime,
 ) -> list[EvalRunResult]:
-    # Isolated in-memory DBs so eval logs never touch real data
-    rate_engine = create_engine("sqlite:///:memory:")
-    RateLimiterBase.metadata.create_all(bind=rate_engine)
-    rate_session = sessionmaker(bind=rate_engine)()
-
+    # Isolated in-memory agent DB so eval results never touch real tables mid-run
     agent_engine = create_engine("sqlite:///:memory:")
     AgentBase.metadata.create_all(bind=agent_engine)
     agent_session = sessionmaker(bind=agent_engine)()
 
     try:
-        for log_data in scenario.log_factory():
-            rate_session.add(RateLimitLog(**log_data))
-        rate_session.commit()
-
+        logs = [SimpleNamespace(**d) for d in scenario.log_factory()]
         app_id = 9999
+        per_ip = False
 
-        error_res = ErrorPatternAgent().analyze(rate_session, agent_session, app_id)
-        token_res = TokenBucketHealthAgent().analyze(
-            rate_session, agent_session, app_id
+        error_summary = build_error_summary(logs, per_ip_address=per_ip)
+        token_summary = build_token_health_summary(logs, per_ip_address=per_ip)
+        paths_summary = build_top_paths_summary(logs, per_ip_address=per_ip)
+
+        error_res = ErrorPatternAgent().analyze(
+            agent_session, app_id, per_ip, error_summary
         )
-        paths_res = TopPathsAgent().analyze(rate_session, agent_session, app_id)
+        token_res = TokenBucketHealthAgent().analyze(
+            agent_session, app_id, per_ip, token_summary
+        )
+        paths_res = TopPathsAgent().analyze(
+            agent_session, app_id, per_ip, paths_summary
+        )
         orch_res = Orchestrator().run(
-            agent_session, app_id, error_res, token_res, paths_res
+            agent_session, app_id, error_res, token_res, paths_res, per_ip
         )
 
         actuals = {
@@ -137,9 +145,7 @@ def _run_scenario(
         real_agent_db.rollback()
         return []
     finally:
-        rate_session.close()
         agent_session.close()
-        rate_engine.dispose()
         agent_engine.dispose()
 
 

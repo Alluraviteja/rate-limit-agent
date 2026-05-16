@@ -13,69 +13,7 @@ from sqlalchemy import (
     Text,
 )
 
-from .database import AgentBase, RateLimiterBase
-
-
-# ── Read-only models (rate_limiter DB) ──────────────────────────────────────
-class AppInfo(RateLimiterBase):
-    __tablename__ = "app_info"
-    __table_args__ = {"extend_existing": True}
-
-    id = Column(BigInteger, primary_key=True)
-    service_name = Column(String(255))
-    service_port = Column(Integer)
-    description = Column(String(1000))
-    enabled = Column(Boolean)
-    per_ip_address = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True))
-    updated_at = Column(DateTime(timezone=True))
-
-
-class RateLimitPlan(RateLimiterBase):
-    __tablename__ = "rate_limit_plan"
-    __table_args__ = {"extend_existing": True}
-
-    id = Column(BigInteger, primary_key=True)
-    app_info_id = Column(BigInteger)
-    path_pattern = Column(String(500))
-    capacity = Column(Integer)
-    refill_rate = Column(Integer)
-    refill_period_seconds = Column(Integer)
-    description = Column(String)
-    enabled = Column(Boolean)
-    created_at = Column(DateTime(timezone=True))
-    updated_at = Column(DateTime(timezone=True))
-
-
-class RateLimitLog(RateLimiterBase):
-    __tablename__ = "rate_limit_log"
-    __table_args__ = {"extend_existing": True}
-
-    id = Column(BigInteger, primary_key=True)
-    app_info_id = Column(BigInteger)
-    client_ip = Column(String(45))
-    was_blocked = Column(Boolean)
-    reason = Column(String)
-    http_method = Column(String(10))
-    request_path = Column(String(500))
-    remaining_tokens = Column(BigInteger)
-    trace_id = Column(String(64))
-    response_code = Column(Integer)
-    request_at = Column(DateTime(timezone=True))
-    retry_after_seconds = Column(BigInteger)
-    redis_failed = Column(Boolean)
-    is_bot = Column(Boolean)
-    bot_name = Column(String(100))
-    user_agent = Column(Text)
-    browser = Column(String(50))
-    browser_version = Column(String(20))
-    os = Column(String(50))
-    os_version = Column(String(20))
-    device_type = Column(String(10))
-    request_size = Column(BigInteger)
-    referer = Column(String(2048))
-    created_at = Column(DateTime(timezone=True))
-    updated_at = Column(DateTime(timezone=True))
+from .database import AgentBase
 
 
 # ── Agent models (agent DB) ─────────────────────────────────────────────────

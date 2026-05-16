@@ -7,9 +7,10 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from ..database import get_agent_db, get_rate_db
-from ..models import AgentResult, AppInfo
+from ..database import get_agent_db
+from ..models import AgentResult
 from ..scheduler import execute_agent_pipeline
+from ..tools.mcp_client import get_mcp
 from .. import schemas
 
 router = APIRouter()
@@ -32,26 +33,25 @@ def _to_dict(obj) -> dict:
     return result
 
 
-def _enabled_ids(rate_db: Session, app_info_id: Optional[int]) -> list[int]:
+def _enabled_ids(app_info_id: Optional[int]) -> list[int]:
     if app_info_id:
         return [app_info_id]
-    return [
-        int(a.id)
-        for a in rate_db.query(AppInfo).filter(AppInfo.enabled.is_(True)).all()
-    ]
+    mcp = get_mcp()
+    if mcp is None:
+        return []
+    return [int(a["id"]) for a in mcp.list_apps()]
 
 
 @router.post("/run", response_model=list[schemas.RunResultOut])
 def run_agents(
     app_info_id: Optional[int] = Query(None, gt=0),
-    rate_db: Session = Depends(get_rate_db),
     agent_db: Session = Depends(get_agent_db),
 ):
     """Manually trigger agents. Runs for all enabled apps if app_info_id not specified."""
-    ids = _enabled_ids(rate_db, app_info_id)
+    ids = _enabled_ids(app_info_id)
     results = []
     for aid in ids:
-        error, token, paths, orch = execute_agent_pipeline(rate_db, agent_db, aid)
+        error, token, paths, orch = execute_agent_pipeline(agent_db, aid)
         results.append(
             {
                 "app_info_id": aid,
@@ -69,10 +69,9 @@ def get_history(
     app_info_id: Optional[int] = Query(None, gt=0),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    rate_db: Session = Depends(get_rate_db),
     agent_db: Session = Depends(get_agent_db),
 ):
-    ids = _enabled_ids(rate_db, app_info_id)
+    ids = _enabled_ids(app_info_id)
     rows = (
         agent_db.query(AgentResult)
         .filter(AgentResult.app_info_id.in_(ids))
