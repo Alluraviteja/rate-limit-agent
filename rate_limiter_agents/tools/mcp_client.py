@@ -6,13 +6,12 @@ import logging
 import re
 from typing import Any
 
-import httpx
 from mcp.client.session import ClientSession
 from mcp.client.sse import sse_client
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
+_DEFAULT_TIMEOUT = 30.0
 _RETRY_DELAY = 1.0
 
 
@@ -48,7 +47,7 @@ class MCPClient:
         self,
         base_url: str,
         secret: str,
-        timeout: httpx.Timeout = _DEFAULT_TIMEOUT,
+        timeout: float = _DEFAULT_TIMEOUT,
     ) -> None:
         self._sse_url = f"{base_url.rstrip('/')}/mcp/sse"
         self._headers = {"X-MCP-Secret": secret}
