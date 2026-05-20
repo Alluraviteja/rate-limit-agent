@@ -109,7 +109,3 @@ def _num(val: str | None) -> float | None:
     except ValueError:
         return None
 
-
-def _int(val: str | None) -> int | None:
-    n = _num(val)
-    return int(n) if n is not None else None

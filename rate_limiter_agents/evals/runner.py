@@ -23,8 +23,6 @@ from .scenarios import SCENARIOS, EvalScenario
 
 logger = logging.getLogger(__name__)
 
-SEVERITY_ORDER = {"none": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
-
 
 def run_evals(real_agent_db: Session) -> dict:
     run_id = str(uuid.uuid4())
