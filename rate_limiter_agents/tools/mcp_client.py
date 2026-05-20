@@ -148,7 +148,6 @@ class MCPClient:
         return self._run(self._call("get_service_health", {}))
 
 
-
 # ── module-level singleton ───────────────────────────────────────────────────
 
 _mcp: MCPClient | None = None

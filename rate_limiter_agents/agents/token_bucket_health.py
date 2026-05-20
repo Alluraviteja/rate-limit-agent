@@ -108,4 +108,3 @@ def _num(val: str | None) -> float | None:
         return float(val.replace("%", "").strip())
     except ValueError:
         return None
-
