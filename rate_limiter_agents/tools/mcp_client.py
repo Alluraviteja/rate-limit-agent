@@ -147,20 +147,6 @@ class MCPClient:
     def get_service_health(self) -> dict:
         return self._run(self._call("get_service_health", {}))
 
-    def get_bucket_state(self, app_info_id: int) -> dict:
-        return self._run(self._call("get_bucket_state", {"appInfoId": app_info_id}))
-
-    def get_all_bucket_states(self) -> list[dict]:
-        return self._run(self._call("get_all_bucket_states", {}))
-
-    def get_redis_failure_stats(
-        self, app_info_id: int | None, window_minutes: int
-    ) -> dict:
-        args: dict[str, Any] = {"windowMinutes": window_minutes}
-        if app_info_id is not None:
-            args["appInfoId"] = app_info_id
-        return self._run(self._call("get_redis_failure_stats", args))
-
 
 # ── module-level singleton ───────────────────────────────────────────────────
 
