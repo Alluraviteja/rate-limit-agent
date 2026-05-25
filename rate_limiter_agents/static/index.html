@@ -219,7 +219,7 @@ async function loadApps() {
   apps.forEach(a => {
     const opt = document.createElement('option');
     opt.value = a.id;
-    opt.textContent = a.service_name || `App ${a.id}`;
+    opt.textContent = a.display_name || a.service_name || `App ${a.id}`;
     sel.appendChild(opt);
   });
 }

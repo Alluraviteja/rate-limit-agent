@@ -12,10 +12,9 @@ import logging  # noqa: E402
 
 from apscheduler.schedulers.background import BackgroundScheduler  # noqa: E402
 from fastapi import FastAPI, Request  # noqa: E402
-from fastapi.responses import JSONResponse  # noqa: E402
+from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
-from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 from alembic import command as alembic_command  # noqa: E402
 from alembic.config import Config as AlembicConfig  # noqa: E402
@@ -56,7 +55,6 @@ app.include_router(dashboard_router.router, prefix="/dashboard", tags=["dashboar
 app.include_router(evals_router.router, prefix="/evals", tags=["evals"])
 
 _static = Path(__file__).parent / "static"
-app.mount("/static", StaticFiles(directory=str(_static)), name="static")
 
 _scheduler = BackgroundScheduler()
 _scheduler.add_job(
@@ -71,6 +69,15 @@ _scheduler.add_job(
     minute=0,
     id="daily_evals",
 )
+
+
+_index_html = _static / "index.html"
+
+
+@app.get("/", include_in_schema=False)
+@app.get("/dashboard", include_in_schema=False)
+async def serve_ui():
+    return FileResponse(_index_html)
 
 
 @app.get("/health", tags=["ops"])
