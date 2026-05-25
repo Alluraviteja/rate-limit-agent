@@ -204,8 +204,7 @@ alembic revision --autogenerate -m "describe the change"
 ### 4. Start the server
 
 ```bash
-cd rate_limiter_agents
-uvicorn main:app --reload --port 8000
+uvicorn rate_limiter_agents.main:app --reload --port 8000
 ```
 
 | URL | Description |
