@@ -22,3 +22,4 @@ body { font-family: ui-sans-serif, system-ui, sans-serif; }
 .action-block    { background:#fee2e2; color:#991b1b; }
 .expand-chevron { transition: transform 0.2s; }
 .expanded .expand-chevron { transform: rotate(180deg); }
+.chart-token-wrap { height: 150px; }
