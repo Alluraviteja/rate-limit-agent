@@ -13,7 +13,6 @@ import logging  # noqa: E402
 from apscheduler.schedulers.background import BackgroundScheduler  # noqa: E402
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
-from fastapi.staticfiles import StaticFiles  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
@@ -71,8 +70,6 @@ _scheduler.add_job(
     id="daily_evals",
 )
 
-
-app.mount("/static", StaticFiles(directory=_static), name="static")
 
 _index_html = _static / "index.html"
 
