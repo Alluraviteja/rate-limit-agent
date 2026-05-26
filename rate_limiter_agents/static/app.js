@@ -100,12 +100,11 @@ async function loadOverview() {
     api('/dashboard/cost'),
     api('/dashboard/timeline?limit=50'),
   ]);
-  if (!sum) return;
 
-  document.getElementById('ov-total-runs').textContent = sum.total_agent_runs ?? '--';
-  document.getElementById('ov-anomalies').textContent  = sum.anomaly_count ?? '--';
-  document.getElementById('ov-cost').textContent       = sum.total_cost_usd != null ? `$${sum.total_cost_usd.toFixed(5)}` : '--';
-  document.getElementById('ov-severity').innerHTML     = sevBadge(sum.last_severity || 'none');
+  document.getElementById('ov-total-runs').textContent = sum?.total_agent_runs ?? '--';
+  document.getElementById('ov-anomalies').textContent  = sum?.anomaly_count ?? '--';
+  document.getElementById('ov-cost').textContent       = sum?.total_cost_usd != null ? `$${sum.total_cost_usd.toFixed(5)}` : '--';
+  document.getElementById('ov-severity').innerHTML     = sevBadge(sum?.last_severity || 'none');
 
   drawSeverityChart(tl || []);
   if (cost) drawTokenChart(cost.by_agent);
@@ -415,24 +414,32 @@ function applyFilterStyles() {
 }
 
 /* ── Init ──────────────────────────────────────────────── */
-document.getElementById('app-select').addEventListener('change', onAppChange);
+document.addEventListener('DOMContentLoaded', function () {
+  document.getElementById('app-select').addEventListener('change', onAppChange);
 
-document.querySelectorAll('.nav-btn').forEach(btn =>
-  btn.addEventListener('click', () => navigate(btn.dataset.page)));
+  document.querySelector('nav').addEventListener('click', e => {
+    const btn = e.target.closest('.nav-btn');
+    if (btn) navigate(btn.dataset.page);
+  });
 
-document.querySelectorAll('.tl-filter').forEach(btn =>
-  btn.addEventListener('click', () => setTlFilter(btn.dataset.val)));
+  document.querySelector('.tl-filter')?.closest('div').addEventListener('click', e => {
+    const btn = e.target.closest('.tl-filter');
+    if (btn) setTlFilter(btn.dataset.val);
+  });
 
-document.querySelectorAll('.ag-filter').forEach(btn =>
-  btn.addEventListener('click', () => setAgFilter(btn.dataset.val)));
+  document.querySelector('.ag-filter')?.closest('div').addEventListener('click', e => {
+    const btn = e.target.closest('.ag-filter');
+    if (btn) setAgFilter(btn.dataset.val);
+  });
 
-document.getElementById('tl-more').addEventListener('click', loadMoreTimeline);
+  document.getElementById('tl-more').addEventListener('click', loadMoreTimeline);
 
-document.getElementById('tl-list').addEventListener('click', e => {
-  const header = e.target.closest('.tl-header');
-  if (header) toggleTl(header);
+  document.getElementById('tl-list').addEventListener('click', e => {
+    const header = e.target.closest('.tl-header');
+    if (header) toggleTl(header);
+  });
+
+  startCountdown();
+  applyFilterStyles();
+  loadApps().then(() => loadOverview());
 });
-
-startCountdown();
-applyFilterStyles();
-loadApps().then(() => loadOverview());
