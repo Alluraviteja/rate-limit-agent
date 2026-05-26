@@ -41,13 +41,29 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_CSP = (
+    "default-src 'self'; "
+    # Tailwind CDN injects <style> elements at runtime — unsafe-inline required
+    "style-src 'self' 'unsafe-inline'; "
+    "script-src 'self' https://static.cloudflareinsights.com; "
+    # Chart.js generates data-URI images for canvas export
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "font-src 'self'; "
+    "frame-ancestors 'none';"
+)
+
 
 @app.middleware("http")
-async def _request_id_middleware(request: Request, call_next):
+async def _security_headers_middleware(request: Request, call_next):
     rid = request.headers.get("X-Request-ID", str(uuid.uuid4()))
     request_id_var.set(rid)
     response = await call_next(request)
     response.headers["X-Request-ID"] = rid
+    response.headers["Content-Security-Policy"] = _CSP
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
 
 
