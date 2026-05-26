@@ -19,17 +19,17 @@
   <!-- App selector -->
   <div class="px-4 py-3 border-b border-gray-700">
     <div class="text-xs text-gray-500 mb-1.5">Application</div>
-    <select id="app-select" onchange="onAppChange()"
+    <select id="app-select"
       class="w-full bg-gray-800 text-gray-200 text-xs rounded px-2 py-1.5 border border-gray-600 focus:outline-none focus:border-indigo-500 cursor-pointer">
       <option value="">All apps</option>
     </select>
   </div>
 
   <nav class="flex-1 py-3 space-y-0.5">
-    <button class="nav-btn active" data-page="overview"  onclick="navigate('overview')">Overview</button>
-    <button class="nav-btn"        data-page="timeline"  onclick="navigate('timeline')">Timeline</button>
-    <button class="nav-btn"        data-page="baseline"  onclick="navigate('baseline')">Baseline</button>
-    <button class="nav-btn"        data-page="cost"      onclick="navigate('cost')">Cost</button>
+    <button class="nav-btn active" data-page="overview">Overview</button>
+    <button class="nav-btn"        data-page="timeline">Timeline</button>
+    <button class="nav-btn"        data-page="baseline">Baseline</button>
+    <button class="nav-btn"        data-page="cost">Cost</button>
   </nav>
   <div class="px-5 py-4 border-t border-gray-700">
     <div class="text-xs text-gray-500 mb-0.5">Next run in</div>
@@ -93,24 +93,24 @@
     <!-- Filters -->
     <div class="flex flex-wrap gap-3 mb-5">
       <div class="flex gap-1 bg-white rounded-lg shadow-sm p-1">
-        <button class="tl-filter active px-3 py-1 rounded text-xs font-medium" data-val="all"      onclick="setTlFilter('all')">All</button>
-        <button class="tl-filter px-3 py-1 rounded text-xs font-medium" data-val="anomaly"   onclick="setTlFilter('anomaly')">Anomalies</button>
-        <button class="tl-filter px-3 py-1 rounded text-xs font-medium" data-val="critical"  onclick="setTlFilter('critical')">Critical</button>
-        <button class="tl-filter px-3 py-1 rounded text-xs font-medium" data-val="high"      onclick="setTlFilter('high')">High</button>
-        <button class="tl-filter px-3 py-1 rounded text-xs font-medium" data-val="medium"    onclick="setTlFilter('medium')">Medium</button>
+        <button class="tl-filter active px-3 py-1 rounded text-xs font-medium" data-val="all">All</button>
+        <button class="tl-filter px-3 py-1 rounded text-xs font-medium" data-val="anomaly">Anomalies</button>
+        <button class="tl-filter px-3 py-1 rounded text-xs font-medium" data-val="critical">Critical</button>
+        <button class="tl-filter px-3 py-1 rounded text-xs font-medium" data-val="high">High</button>
+        <button class="tl-filter px-3 py-1 rounded text-xs font-medium" data-val="medium">Medium</button>
       </div>
       <div class="flex gap-1 bg-white rounded-lg shadow-sm p-1">
-        <button class="ag-filter active px-3 py-1 rounded text-xs font-medium" data-val="all"          onclick="setAgFilter('all')">All agents</button>
-        <button class="ag-filter px-3 py-1 rounded text-xs font-medium" data-val="error"        onclick="setAgFilter('error')">Error pattern</button>
-        <button class="ag-filter px-3 py-1 rounded text-xs font-medium" data-val="token"        onclick="setAgFilter('token')">Token health</button>
-        <button class="ag-filter px-3 py-1 rounded text-xs font-medium" data-val="paths"        onclick="setAgFilter('paths')">Top paths</button>
-        <button class="ag-filter px-3 py-1 rounded text-xs font-medium" data-val="orchestrator" onclick="setAgFilter('orchestrator')">Orchestrator</button>
+        <button class="ag-filter active px-3 py-1 rounded text-xs font-medium" data-val="all">All agents</button>
+        <button class="ag-filter px-3 py-1 rounded text-xs font-medium" data-val="error">Error pattern</button>
+        <button class="ag-filter px-3 py-1 rounded text-xs font-medium" data-val="token">Token health</button>
+        <button class="ag-filter px-3 py-1 rounded text-xs font-medium" data-val="paths">Top paths</button>
+        <button class="ag-filter px-3 py-1 rounded text-xs font-medium" data-val="orchestrator">Orchestrator</button>
       </div>
     </div>
 
     <div id="tl-list" class="space-y-2"></div>
     <div class="mt-4 text-center">
-      <button id="tl-more" onclick="loadMoreTimeline()"
+      <button id="tl-more"
         class="hidden px-5 py-2 bg-white border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 shadow-sm">
         Load more
       </button>

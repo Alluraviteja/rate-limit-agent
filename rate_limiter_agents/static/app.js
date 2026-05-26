@@ -274,8 +274,7 @@ function buildTlRow(row) {
   const sev = row.final_severity || 'none';
   return `
   <div class="bg-white rounded-xl shadow-sm border-l-4 border-l-${sev} overflow-hidden">
-    <div class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 select-none tl-header"
-         onclick="toggleTl(this)">
+    <div class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 select-none tl-header">
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2 mb-0.5">
           ${sevBadge(sev)}
@@ -415,6 +414,24 @@ function applyFilterStyles() {
 }
 
 /* ── Init ──────────────────────────────────────────────── */
+document.getElementById('app-select').addEventListener('change', onAppChange);
+
+document.querySelectorAll('.nav-btn').forEach(btn =>
+  btn.addEventListener('click', () => navigate(btn.dataset.page)));
+
+document.querySelectorAll('.tl-filter').forEach(btn =>
+  btn.addEventListener('click', () => setTlFilter(btn.dataset.val)));
+
+document.querySelectorAll('.ag-filter').forEach(btn =>
+  btn.addEventListener('click', () => setAgFilter(btn.dataset.val)));
+
+document.getElementById('tl-more').addEventListener('click', loadMoreTimeline);
+
+document.getElementById('tl-list').addEventListener('click', e => {
+  const header = e.target.closest('.tl-header');
+  if (header) toggleTl(header);
+});
+
 startCountdown();
 applyFilterStyles();
 loadApps().then(() => loadOverview());
