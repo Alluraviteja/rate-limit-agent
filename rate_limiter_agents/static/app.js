@@ -17,9 +17,8 @@ const SEV = {
 const SEV_VAL = { none:0, low:1, medium:2, high:3, critical:4 };
 
 function sevBadge(sev) {
-  const s = SEV[sev] || SEV.none;
-  return `<span style="background:${s.bg};color:${s.text};border:1px solid ${s.color}"
-    class="inline-block px-2 py-0.5 rounded text-xs font-semibold capitalize">${sev || 'none'}</span>`;
+  const cls = sev in SEV ? sev : 'none';
+  return `<span class="sev-${cls} inline-block px-2 py-0.5 rounded text-xs font-semibold capitalize">${sev || 'none'}</span>`;
 }
 function actionPill(action) {
   const cls = { monitor:'action-monitor', alert:'action-alert', throttle:'action-throttle', block:'action-block' }[action] || 'action-monitor';

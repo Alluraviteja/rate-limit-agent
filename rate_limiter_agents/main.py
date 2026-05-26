@@ -43,7 +43,7 @@ app.add_middleware(
 
 _CSP = (
     "default-src 'self'; "
-    "style-src 'self' 'unsafe-inline'; "
+    "style-src 'self'; "
     "script-src 'self'; "
     "img-src 'self' data:; "
     "connect-src 'self'; "
