@@ -1,0 +1,24 @@
+body { font-family: ui-sans-serif, system-ui, sans-serif; }
+.nav-btn {
+  display: block; width: 100%; text-align: left;
+  padding: 9px 20px; font-size: 14px; color: #9ca3af;
+  border-left: 3px solid transparent; transition: all 0.15s;
+}
+.nav-btn:hover { background: #1f2937; color: #f3f4f6; }
+.nav-btn.active { background: #1f2937; color: #fff; border-left-color: #6366f1; }
+.sev-none     { background: #F1EFE8; color: #444441; border: 1px solid #888780; }
+.sev-low      { background: #E6F1FB; color: #0C447C; border: 1px solid #378ADD; }
+.sev-medium   { background: #FAEEDA; color: #633806; border: 1px solid #EF9F27; }
+.sev-high     { background: #FAECE7; color: #712B13; border: 1px solid #D85A30; }
+.sev-critical { background: #FCEBEB; color: #791F1F; border: 1px solid #E24B4A; }
+.border-l-none     { border-left-color: #888780; }
+.border-l-low      { border-left-color: #378ADD; }
+.border-l-medium   { border-left-color: #EF9F27; }
+.border-l-high     { border-left-color: #D85A30; }
+.border-l-critical { border-left-color: #E24B4A; }
+.action-monitor  { background:#f3f4f6; color:#374151; }
+.action-alert    { background:#fef9c3; color:#854d0e; }
+.action-throttle { background:#ffedd5; color:#9a3412; }
+.action-block    { background:#fee2e2; color:#991b1b; }
+.expand-chevron { transition: transform 0.2s; }
+.expanded .expand-chevron { transform: rotate(180deg); }
