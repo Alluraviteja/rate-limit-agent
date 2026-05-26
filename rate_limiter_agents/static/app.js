@@ -308,18 +308,19 @@ function buildSubCard(title, sub, metric, extra) {
         <div class="text-xs font-semibold text-gray-500">${title}</div>
         ${sevBadge(sev)}
       </div>
-      <div class="text-xs text-gray-700">${metric(sub)}</div>
-      <div class="text-xs text-gray-400">${extra(sub)}</div>
-      <div class="text-xs text-gray-500 italic mt-1 line-clamp-2">${sub?.reason || '—'}</div>
+      ${sub ? `
+        <div class="text-xs text-gray-700">${metric(sub)}</div>
+        <div class="text-xs text-gray-400">${extra(sub)}</div>
+        <div class="text-xs text-gray-500 italic mt-1 line-clamp-2">${sub.reason || '—'}</div>
+      ` : '<div class="text-xs text-gray-400">No data</div>'}
     </div>`;
 }
 
 function toggleTl(header) {
-  const row    = header.closest('.bg-white');
+  const row    = header.parentElement;
   const expand = row.querySelector('.tl-expand');
-  const isOpen = !expand.classList.contains('hidden');
-  expand.classList.toggle('hidden', isOpen);
-  row.classList.toggle('expanded', !isOpen);
+  expand.classList.toggle('hidden');
+  row.classList.toggle('expanded', !expand.classList.contains('hidden'));
 }
 
 /* ── Baseline ──────────────────────────────────────────── */
