@@ -13,6 +13,7 @@ import logging  # noqa: E402
 from apscheduler.schedulers.background import BackgroundScheduler  # noqa: E402
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.responses import FileResponse, JSONResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 
@@ -40,13 +41,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+_CSP = (
+    "default-src 'self'; "
+    "style-src 'self'; "
+    "script-src 'self'; "
+    "img-src 'self' data:; "
+    "connect-src 'self'; "
+    "font-src 'self'; "
+    "frame-ancestors 'none';"
+)
+
 
 @app.middleware("http")
-async def _request_id_middleware(request: Request, call_next):
+async def _security_headers_middleware(request: Request, call_next):
     rid = request.headers.get("X-Request-ID", str(uuid.uuid4()))
     request_id_var.set(rid)
     response = await call_next(request)
     response.headers["X-Request-ID"] = rid
+    response.headers["Content-Security-Policy"] = _CSP
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     return response
 
 
@@ -55,6 +70,7 @@ app.include_router(dashboard_router.router, prefix="/dashboard", tags=["dashboar
 app.include_router(evals_router.router, prefix="/evals", tags=["evals"])
 
 _static = Path(__file__).parent / "static"
+app.mount("/static", StaticFiles(directory=_static), name="static")
 
 _scheduler = BackgroundScheduler()
 _scheduler.add_job(
