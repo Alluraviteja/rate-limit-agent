@@ -31,6 +31,8 @@
     <button class="nav-btn"        data-page="timeline">Timeline</button>
     <button class="nav-btn"        data-page="baseline">Baseline</button>
     <button class="nav-btn"        data-page="cost">Cost</button>
+    <button class="nav-btn"        data-page="outcomes">Outcomes</button>
+    <button class="nav-btn"        data-page="evals">Evals</button>
   </nav>
   <div class="px-5 py-4 border-t border-gray-700">
     <div class="text-xs text-gray-500 mb-0.5">Next run in</div>
@@ -45,45 +47,40 @@
   <div id="page-overview" class="page p-6 min-h-full">
     <h1 class="text-lg font-semibold text-gray-700 mb-5">Overview</h1>
 
-    <!-- 4 metric cards -->
+    <!-- Operational summary bar -->
     <div class="grid grid-cols-4 gap-4 mb-6">
+      <div class="bg-white rounded-xl shadow-sm p-4">
+        <div class="text-xs text-gray-400 mb-1">Active incidents</div>
+        <div id="ov-active-incidents" class="text-2xl font-bold text-gray-800">--</div>
+        <div class="text-xs text-gray-400 mt-1">apps with anomaly now</div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-4">
+        <div class="text-xs text-gray-400 mb-1">Anomalies (total)</div>
+        <div id="ov-anomalies" class="text-2xl font-bold text-gray-800">--</div>
+        <div id="ov-anomalies-sub" class="text-xs text-gray-400 mt-1"></div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-4">
+        <div class="text-xs text-gray-400 mb-1">Resolution rate</div>
+        <div id="ov-resolution" class="text-2xl font-bold text-gray-800">--</div>
+        <div id="ov-resolution-sub" class="text-xs text-gray-400 mt-1"></div>
+      </div>
       <div class="bg-white rounded-xl shadow-sm p-4">
         <div class="text-xs text-gray-400 mb-1">Total agent runs</div>
         <div id="ov-total-runs" class="text-2xl font-bold text-gray-800">--</div>
-      </div>
-      <div class="bg-white rounded-xl shadow-sm p-4">
-        <div class="text-xs text-gray-400 mb-1">Anomalies detected</div>
-        <div id="ov-anomalies" class="text-2xl font-bold text-gray-800">--</div>
-      </div>
-      <div class="bg-white rounded-xl shadow-sm p-4">
-        <div class="text-xs text-gray-400 mb-1">Total cost</div>
-        <div id="ov-cost" class="text-2xl font-bold text-gray-800">--</div>
-      </div>
-      <div class="bg-white rounded-xl shadow-sm p-4">
-        <div class="text-xs text-gray-400 mb-2">Last severity</div>
-        <div id="ov-severity"></div>
+        <div id="ov-last-run" class="text-xs text-gray-400 mt-1"></div>
       </div>
     </div>
 
-    <!-- 2 charts -->
-    <div class="grid grid-cols-2 gap-4 mb-6">
-      <div class="bg-white rounded-xl shadow-sm p-4">
-        <div class="text-xs font-semibold text-gray-500 mb-3">Severity — last 50 runs</div>
-        <canvas id="severityChart" height="150"></canvas>
-      </div>
-      <div class="bg-white rounded-xl shadow-sm p-4">
-        <div class="text-xs font-semibold text-gray-500 mb-3">Token usage by agent</div>
-        <div class="flex items-center justify-center chart-token-wrap">
-          <canvas id="tokenChart"></canvas>
-        </div>
-      </div>
+    <!-- Per-app status grid -->
+    <div class="mb-6">
+      <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">App status</div>
+      <div id="ov-app-grid" class="grid grid-cols-1 gap-3"></div>
     </div>
 
-    <!-- 3 agent cards -->
-    <div class="grid grid-cols-3 gap-4">
-      <div id="card-error" class="bg-white rounded-xl shadow-sm p-4"></div>
-      <div id="card-token" class="bg-white rounded-xl shadow-sm p-4"></div>
-      <div id="card-paths" class="bg-white rounded-xl shadow-sm p-4"></div>
+    <!-- Severity trend chart -->
+    <div class="bg-white rounded-xl shadow-sm p-4">
+      <div class="text-xs font-semibold text-gray-500 mb-3">Severity trend — last 50 runs</div>
+      <canvas id="severityChart" height="120"></canvas>
     </div>
   </div>
 
@@ -122,14 +119,23 @@
   <div id="page-baseline" class="page hidden p-6">
     <h1 class="text-lg font-semibold text-gray-700 mb-5">Baseline memory</h1>
     <div class="grid grid-cols-3 gap-4 mb-6" id="bl-cards"></div>
-    <div class="bg-white rounded-xl shadow-sm p-5 max-w-lg">
+    <div class="bg-white rounded-xl shadow-sm p-5 max-w-lg mb-6">
       <div class="text-sm font-semibold text-gray-600 mb-3">Auto-adjustment rules</div>
       <ul class="space-y-2 text-sm text-gray-500">
-        <li class="flex gap-2"><span class="text-blue-500">•</span> Threshold tightens to <strong>2.5x</strong> when block rate &lt; 5% (low traffic pressure)</li>
-        <li class="flex gap-2"><span class="text-amber-500">•</span> Threshold stays at <strong>3.0x</strong> when block rate is 5–20% (normal)</li>
-        <li class="flex gap-2"><span class="text-red-500">•</span> Threshold loosens to <strong>4.0x</strong> when block rate &gt; 20% (high background noise)</li>
-        <li class="flex gap-2"><span class="text-gray-400">•</span> Sample count capped at <strong>672</strong> (7 days × 96 runs/day)</li>
+        <li class="flex gap-2"><span class="text-blue-500">•</span> Threshold tightens to <strong>2.5×</strong> when block rate &lt; 5% (low traffic pressure)</li>
+        <li class="flex gap-2"><span class="text-amber-500">•</span> Threshold stays at <strong>3.0×</strong> when block rate is 5–20% (normal)</li>
+        <li class="flex gap-2"><span class="text-red-500">•</span> Threshold loosens to <strong>4.0×</strong> when block rate &gt; 20% (high background noise)</li>
+        <li class="flex gap-2"><span class="text-indigo-400">•</span> Uses <strong>EWMA</strong> (α=0.1) — each new sample contributes 10% weight, baseline stays current indefinitely</li>
       </ul>
+    </div>
+
+    <!-- Time-bucketed baselines -->
+    <div class="bg-white rounded-xl shadow-sm p-5">
+      <div class="text-sm font-semibold text-gray-600 mb-1">Time-of-day baselines</div>
+      <div class="text-xs text-gray-400 mb-4">Average block rate per hour for the selected day of week — learned from historical runs</div>
+      <div class="flex gap-2 flex-wrap mb-4" id="bl-dow-tabs"></div>
+      <canvas id="timeBaselineChart" height="100"></canvas>
+      <div id="bl-time-empty" class="hidden text-sm text-gray-400 text-center py-6">No time-baseline data yet — will populate after a few runs.</div>
     </div>
   </div>
 
@@ -152,6 +158,102 @@
     <div class="bg-white rounded-xl shadow-sm p-4">
       <div class="text-xs font-semibold text-gray-500 mb-3">Daily cost per agent — last 7 days</div>
       <canvas id="costChart" height="120"></canvas>
+    </div>
+  </div>
+
+  <!-- ═══ OUTCOMES ═══ -->
+  <div id="page-outcomes" class="page hidden p-6">
+    <h1 class="text-lg font-semibold text-gray-700 mb-5">Action outcomes</h1>
+
+    <!-- Summary cards -->
+    <div class="grid grid-cols-3 gap-4 mb-6">
+      <div class="bg-white rounded-xl shadow-sm p-4">
+        <div class="text-xs text-gray-400 mb-1">Total measured</div>
+        <div id="oc-total" class="text-2xl font-bold text-gray-800">--</div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-4">
+        <div class="text-xs text-gray-400 mb-1">Anomalies resolved</div>
+        <div id="oc-resolved" class="text-2xl font-bold text-gray-800">--</div>
+      </div>
+      <div class="bg-white rounded-xl shadow-sm p-4">
+        <div class="text-xs text-gray-400 mb-1">Resolution rate</div>
+        <div id="oc-rate" class="text-2xl font-bold text-gray-800">--</div>
+        <div class="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div id="oc-rate-bar" class="h-full bg-emerald-500 rounded-full transition-all" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Explanation -->
+    <div class="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-6 text-xs text-indigo-700 leading-relaxed">
+      Each pipeline run records the action taken (block/throttle/alert/monitor) and the severity at that moment.
+      On the <strong>next run</strong> for the same app, the system checks whether severity went down —
+      if so, <strong>anomaly_resolved = true</strong>. This is the only real accuracy signal:
+      not whether the LLM matched a test scenario, but whether the decision actually helped.
+    </div>
+
+    <!-- Recent outcomes table -->
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+          <tr>
+            <th class="px-4 py-3 text-left">Time</th>
+            <th class="px-4 py-3 text-left">App</th>
+            <th class="px-4 py-3 text-left">Action taken</th>
+            <th class="px-4 py-3 text-left">Severity at action</th>
+            <th class="px-4 py-3 text-left">Severity after</th>
+            <th class="px-4 py-3 text-left">Result</th>
+          </tr>
+        </thead>
+        <tbody id="oc-table" class="divide-y divide-gray-100 text-gray-700"></tbody>
+      </table>
+      <div id="oc-empty" class="hidden text-sm text-gray-400 text-center py-8">
+        No outcomes yet — data appears after two consecutive pipeline runs for the same app.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ EVALS ═══ -->
+  <div id="page-evals" class="page hidden p-6">
+    <div class="flex items-center justify-between mb-5">
+      <h1 class="text-lg font-semibold text-gray-700">Agent evals</h1>
+      <button id="evals-run-btn"
+        class="px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors">
+        Run evals now
+      </button>
+    </div>
+
+    <!-- Accuracy trend chart -->
+    <div class="bg-white rounded-xl shadow-sm p-4 mb-6">
+      <div class="text-xs font-semibold text-gray-500 mb-3">Accuracy trend across runs</div>
+      <canvas id="evalsChart" height="120"></canvas>
+      <div id="evals-chart-empty" class="hidden text-sm text-gray-400 text-center py-6">No eval runs yet — click "Run evals now" to start.</div>
+    </div>
+
+    <!-- Latest run breakdown -->
+    <div class="mb-3 flex items-center justify-between">
+      <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide">Latest run — per scenario</div>
+      <div id="evals-run-at" class="text-xs text-gray-400"></div>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm overflow-hidden mb-6">
+      <table class="w-full text-sm">
+        <thead class="bg-gray-50 text-xs text-gray-500 uppercase">
+          <tr>
+            <th class="px-4 py-3 text-left">Scenario</th>
+            <th class="px-4 py-3 text-left">Agent</th>
+            <th class="px-4 py-3 text-left">Expected sev</th>
+            <th class="px-4 py-3 text-left">Actual sev</th>
+            <th class="px-4 py-3 text-left">Expected action</th>
+            <th class="px-4 py-3 text-left">Actual action</th>
+            <th class="px-4 py-3 text-center">Sev ✓</th>
+            <th class="px-4 py-3 text-center">Act ✓</th>
+          </tr>
+        </thead>
+        <tbody id="evals-table" class="divide-y divide-gray-100 text-gray-700"></tbody>
+      </table>
+      <div id="evals-empty" class="hidden text-sm text-gray-400 text-center py-8">
+        No eval results yet.
+      </div>
     </div>
   </div>
 

@@ -5,6 +5,8 @@ let agFilter    = 'all';
 let tlOffset    = 0;
 let selectedApp = '';
 let _charts     = {};
+let _timeBaselineData = [];
+let _selectedDow = new Date().getDay(); // 0=Sun … 6=Sat (JS convention)
 
 /* ── Severity helpers ──────────────────────────────────── */
 const SEV = {
@@ -15,6 +17,7 @@ const SEV = {
   critical: { color:'#E24B4A', bg:'#FCEBEB', text:'#791F1F' },
 };
 const SEV_VAL = { none:0, low:1, medium:2, high:3, critical:4 };
+const DOW_LABELS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 function sevBadge(sev) {
   const cls = sev in SEV ? sev : 'none';
@@ -23,6 +26,15 @@ function sevBadge(sev) {
 function actionPill(action) {
   const cls = { monitor:'action-monitor', alert:'action-alert', throttle:'action-throttle', block:'action-block' }[action] || 'action-monitor';
   return `<span class="${cls} inline-block px-2 py-0.5 rounded text-xs font-semibold capitalize">${action}</span>`;
+}
+function outcomePill(resolved, severityAfter) {
+  if (resolved === null || resolved === undefined) {
+    return `<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-400">Pending</span>`;
+  }
+  if (resolved) {
+    return `<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-700">✓ Resolved → ${severityAfter || '?'}</span>`;
+  }
+  return `<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-600">↑ Worsened → ${severityAfter || '?'}</span>`;
 }
 
 /* ── App selector ──────────────────────────────────────── */
@@ -58,22 +70,22 @@ function loadPage(page) {
   if (page === 'timeline')  { tlOffset = 0; loadTimeline(true); }
   if (page === 'baseline')  loadBaseline();
   if (page === 'cost')      loadCost();
+  if (page === 'outcomes')  loadOutcomes();
+  if (page === 'evals')     loadEvals();
 }
 
-/* ── Countdown ─────────────────────────────────────────── */
+/* ── Countdown — matches AGENT_INTERVAL_MINUTES=1 ─────── */
 function startCountdown() {
   setInterval(() => {
-    const now  = new Date();
-    const secs = now.getMinutes() * 60 + now.getSeconds();
-    const next = Math.ceil((secs + 1) / 900) * 900;
-    const rem  = next - secs;
+    const secs = new Date().getSeconds();
+    const rem  = 60 - secs;
     document.getElementById('countdown').textContent =
-      String(Math.floor(rem / 60)).padStart(2,'0') + ':' + String(rem % 60).padStart(2,'0');
+      '00:' + String(rem).padStart(2, '0');
   }, 1000);
 }
 
-/* ── Auto-refresh ──────────────────────────────────────── */
-setInterval(() => loadPage(currentPage), 15 * 60 * 1000);
+/* ── Auto-refresh every 1 minute ──────────────────────── */
+setInterval(() => loadPage(currentPage), 60 * 1000);
 
 /* ── API helpers ───────────────────────────────────────── */
 async function apiRaw(path) {
@@ -95,20 +107,76 @@ async function api(path) {
 
 /* ── Overview ──────────────────────────────────────────── */
 async function loadOverview() {
-  const [sum, cost, tl] = await Promise.all([
+  const [sum, tl, oc, appStatus] = await Promise.all([
     api('/dashboard/summary'),
-    api('/dashboard/cost'),
     api('/dashboard/timeline?limit=50'),
+    api('/dashboard/outcomes'),
+    apiRaw('/dashboard/status'),
   ]);
 
-  document.getElementById('ov-total-runs').textContent = sum?.total_agent_runs ?? '--';
-  document.getElementById('ov-anomalies').textContent  = sum?.anomaly_count ?? '--';
-  document.getElementById('ov-cost').textContent       = sum?.total_cost_usd != null ? `$${sum.total_cost_usd.toFixed(5)}` : '--';
-  document.getElementById('ov-severity').innerHTML     = sevBadge(sum?.last_severity || 'none');
+  const activeIncidents = (appStatus || []).filter(a => a.anomaly_detected).length;
+  document.getElementById('ov-active-incidents').textContent = activeIncidents;
+  document.getElementById('ov-active-incidents').className =
+    `text-2xl font-bold ${activeIncidents > 0 ? 'text-red-600' : 'text-emerald-600'}`;
 
+  document.getElementById('ov-total-runs').textContent = sum?.total_agent_runs ?? '--';
+  document.getElementById('ov-last-run').textContent =
+    sum?.last_run_at ? `Last: ${relativeTime(new Date(sum.last_run_at))}` : '';
+
+  document.getElementById('ov-anomalies').textContent = sum?.anomaly_count ?? '--';
+  document.getElementById('ov-anomalies-sub').textContent =
+    sum ? `${sum.critical_count} critical, ${sum.high_count} high` : '';
+
+  if (oc && oc.total_measured > 0) {
+    document.getElementById('ov-resolution').textContent     = `${oc.resolution_rate_pct}%`;
+    document.getElementById('ov-resolution-sub').textContent = `${oc.resolved_count} / ${oc.total_measured} measured`;
+  } else {
+    document.getElementById('ov-resolution').textContent     = '--';
+    document.getElementById('ov-resolution-sub').textContent = 'No outcomes yet';
+  }
+
+  drawAppStatusGrid(appStatus || []);
   drawSeverityChart(tl || []);
-  if (cost) drawTokenChart(cost.by_agent);
-  drawAgentCards(tl && tl[0] ? tl[0] : null);
+}
+
+function drawAppStatusGrid(apps) {
+  const grid = document.getElementById('ov-app-grid');
+  if (!apps.length) {
+    grid.innerHTML = '<div class="text-sm text-gray-400">No app data yet.</div>';
+    return;
+  }
+  grid.className = `grid gap-3 ${apps.length === 1 ? 'grid-cols-1' : apps.length <= 3 ? 'grid-cols-3' : 'grid-cols-2 md:grid-cols-3'}`;
+  grid.innerHTML = apps.map(a => {
+    const sev = a.final_severity || 'none';
+    const s = SEV[sev] || SEV.none;
+    const trendIcon = { escalating: '↑', recovering: '↓', stable: '—' }[a.trend_direction] || '—';
+    const trendColor = { escalating: 'text-red-500', recovering: 'text-emerald-500', stable: 'text-gray-400' }[a.trend_direction] || 'text-gray-400';
+    const agentDots = ['error_severity','token_severity','path_severity'].map(k => {
+      const sv = a[k] || 'none';
+      return `<span title="${k.replace('_severity','')} agent" class="inline-block w-2 h-2 rounded-full" style="background:${(SEV[sv]||SEV.none).color}"></span>`;
+    }).join('');
+    return `
+    <div class="bg-white rounded-xl shadow-sm p-4 border-l-4" style="border-color:${s.color}">
+      <div class="flex items-center justify-between mb-2">
+        <div class="text-sm font-semibold text-gray-700 truncate">${a.app_name || `App ${a.app_info_id}`}</div>
+        ${sevBadge(sev)}
+      </div>
+      <div class="flex items-center gap-3 mb-2">
+        ${agentDots}
+        <span class="text-xs text-gray-400">${a.agents_firing} of 3 agents firing</span>
+        <span class="text-xs font-semibold ${trendColor} ml-auto">${trendIcon} ${a.trend_direction || 'stable'}</span>
+      </div>
+      ${a.spike_multiplier != null ? `
+        <div class="text-xs text-gray-500 mb-1">
+          <span class="font-semibold text-gray-700">${a.spike_multiplier}×</span> above baseline block rate
+        </div>` : ''}
+      <div class="flex items-center justify-between">
+        ${actionPill(a.action || 'monitor')}
+        <span class="text-xs text-gray-400">${a.run_at ? relativeTime(new Date(a.run_at)) : '—'}</span>
+      </div>
+      ${a.reason ? `<div class="text-xs text-gray-500 italic mt-2 line-clamp-2">${a.reason}</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function destroyChart(key) {
@@ -156,72 +224,6 @@ function drawSeverityChart(rows) {
   });
 }
 
-function drawTokenChart(byAgent) {
-  destroyChart('token');
-  if (!byAgent || !byAgent.length) return;
-  const labels = byAgent.map(a => a.agent_name.replace(/_/g,' '));
-  const data   = byAgent.map(a => a.tokens_today);
-  const colors = ['#6366f1','#22d3ee','#f59e0b','#10b981'];
-  _charts.token = new Chart(document.getElementById('tokenChart'), {
-    type: 'doughnut',
-    data: {
-      labels,
-      datasets: [{ data, backgroundColor: colors, borderWidth: 2 }]
-    },
-    options: {
-      animation: false,
-      plugins: {
-        legend: { position: 'right', labels: { font: { size: 10 }, boxWidth: 10 } }
-      },
-      cutout: '60%',
-    }
-  });
-}
-
-function drawAgentCards(run) {
-  const defs = [
-    {
-      id: 'card-error',
-      label: 'Error pattern',
-      key: 'error',
-      metric: r => `Block rate: ${r.block_rate_pct?.toFixed(1)}%`,
-      extra:  r => `Total: ${r.total_requests ?? 0} reqs`,
-    },
-    {
-      id: 'card-token',
-      label: 'Token bucket health',
-      key: 'token',
-      metric: r => `Avg remaining: ${r.avg_remaining?.toFixed(0)}`,
-      extra:  r => `Total: ${r.total_requests ?? 0} reqs`,
-    },
-    {
-      id: 'card-paths',
-      label: 'Top paths',
-      key: 'paths',
-      metric: r => `Block rate: ${r.block_rate_pct?.toFixed(1)}%`,
-      extra:  r => `Unique paths: ${r.unique_paths ?? 0}`,
-    },
-  ];
-  defs.forEach(({ id, label, key, metric, extra }) => {
-    const el  = document.getElementById(id);
-    const sub = run ? run[key] : null;
-    const sev = sub?.severity || 'none';
-    el.innerHTML = `
-      <div class="flex items-center justify-between mb-2">
-        <div class="text-xs font-semibold text-gray-500">${label}</div>
-        ${sevBadge(sev)}
-      </div>
-      ${sub ? `
-        <div class="text-sm text-gray-700 mb-1">${metric(sub)}</div>
-        <div class="text-xs text-gray-400 mb-2">${extra(sub)}</div>
-        <div class="text-xs text-gray-500 italic mb-2">${sub.reason || '—'}</div>
-        <div class="flex items-center gap-2">${actionPill(sub?.action || 'monitor')}
-          <span class="text-xs text-gray-400">${sub?.tokens_used ?? 0} tokens</span>
-        </div>
-      ` : '<div class="text-sm text-gray-400">No data yet</div>'}
-    `;
-  });
-}
 
 /* ── Timeline ──────────────────────────────────────────── */
 function setTlFilter(val) {
@@ -271,13 +273,26 @@ function buildTlRow(row) {
   const ts  = new Date(row.run_at);
   const rel = relativeTime(ts);
   const sev = row.final_severity || 'none';
+  const s   = SEV[sev] || SEV.none;
+  const trendIcon  = { escalating: '↑', recovering: '↓', stable: '—' }[row.trend_direction] || '—';
+  const trendColor = { escalating: 'text-red-500', recovering: 'text-emerald-500', stable: 'text-gray-400' }[row.trend_direction] || 'text-gray-400';
+  const spikeTag = row.spike_multiplier != null
+    ? `<span class="text-xs font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">${row.spike_multiplier}×</span>`
+    : '';
+  const agentsBadge = row.agents_firing > 0
+    ? `<span class="text-xs text-gray-400">${row.agents_firing}/3 agents</span>`
+    : '';
   return `
-  <div class="bg-white rounded-xl shadow-sm border-l-4 border-l-${sev} overflow-hidden">
+  <div class="bg-white rounded-xl shadow-sm overflow-hidden" style="border-left:3px solid ${s.color}">
     <div class="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-gray-50 select-none tl-header">
       <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2 mb-0.5">
+        <div class="flex items-center gap-2 mb-0.5 flex-wrap">
           ${sevBadge(sev)}
+          ${spikeTag}
+          ${agentsBadge}
+          <span class="text-xs ${trendColor} font-medium">${trendIcon} ${row.trend_direction || 'stable'}</span>
           <span class="text-xs text-gray-400">${ts.toLocaleString()} · ${rel}</span>
+          ${outcomePill(row.anomaly_resolved, row.severity_after)}
         </div>
         <div class="text-sm text-gray-700 truncate">${row.reason || '—'}</div>
       </div>
@@ -324,27 +339,109 @@ function toggleTl(header) {
 
 /* ── Baseline ──────────────────────────────────────────── */
 async function loadBaseline() {
-  const data = await api('/dashboard/baseline');
-  if (!data || !data.length) return;
-  const container = document.getElementById('bl-cards');
-  container.innerHTML = '';
-  data.forEach((b, idx) => {
-    const header = data.length > 1
-      ? `<div class="col-span-3 text-xs font-semibold text-gray-500 mt-${idx > 0 ? 4 : 0}">App ${b.app_info_id}</div>`
-      : '';
-    const cards = [
-      { label: 'Avg RPS (7d)',        val: parseFloat(b.avg_rps_7d        ?? 0).toFixed(2), unit: 'req/s' },
-      { label: 'Avg block rate (7d)', val: parseFloat(b.avg_block_rate_7d ?? 0).toFixed(2), unit: '%' },
-      { label: 'Avg bot ratio (7d)',  val: parseFloat(b.avg_bot_ratio_7d  ?? 0).toFixed(2), unit: '%' },
-      { label: 'Spike threshold',     val: parseFloat(b.spike_threshold   ?? 3).toFixed(1), unit: 'x' },
-      { label: 'Sample count',        val: b.sample_count ?? 0,                              unit: '/ 672' },
-      { label: 'Last updated',        val: b.last_updated ? new Date(b.last_updated).toLocaleString() : '—', unit: '' },
-    ];
-    container.innerHTML += header + cards.map(c => `
-      <div class="bg-white rounded-xl shadow-sm p-4">
-        <div class="text-xs text-gray-400 mb-1">${c.label}</div>
-        <div class="text-xl font-bold text-gray-800">${c.val}<span class="text-sm font-normal text-gray-400 ml-1">${c.unit}</span></div>
-      </div>`).join('');
+  const [data, timeBl] = await Promise.all([
+    api('/dashboard/baseline'),
+    api('/dashboard/time-baseline'),
+  ]);
+
+  if (data && data.length) {
+    const container = document.getElementById('bl-cards');
+    container.innerHTML = '';
+    data.forEach((b, idx) => {
+      const header = data.length > 1
+        ? `<div class="col-span-3 text-xs font-semibold text-gray-500 mt-${idx > 0 ? 4 : 0}">App ${b.app_info_id}</div>`
+        : '';
+      const cards = [
+        { label: 'Avg RPS (EWMA)',        val: parseFloat(b.avg_rps_7d        ?? 0).toFixed(2), unit: 'req/s' },
+        { label: 'Avg block rate (EWMA)', val: parseFloat(b.avg_block_rate_7d ?? 0).toFixed(2), unit: '%' },
+        { label: 'Avg bot ratio (EWMA)',  val: parseFloat(b.avg_bot_ratio_7d  ?? 0).toFixed(2), unit: '%' },
+        { label: 'Spike threshold',       val: parseFloat(b.spike_threshold   ?? 3).toFixed(1), unit: 'x' },
+        { label: 'Sample count',          val: b.sample_count ?? 0,                              unit: '/ 9,999' },
+        { label: 'Last updated',          val: b.last_updated ? new Date(b.last_updated).toLocaleString() : '—', unit: '' },
+      ];
+      container.innerHTML += header + cards.map(c => `
+        <div class="bg-white rounded-xl shadow-sm p-4">
+          <div class="text-xs text-gray-400 mb-1">${c.label}</div>
+          <div class="text-xl font-bold text-gray-800">${c.val}<span class="text-sm font-normal text-gray-400 ml-1">${c.unit}</span></div>
+        </div>`).join('');
+    });
+  }
+
+  _timeBaselineData = timeBl || [];
+  renderTimeBaselineTabs();
+}
+
+function renderTimeBaselineTabs() {
+  const tabsEl = document.getElementById('bl-dow-tabs');
+  const emptyEl = document.getElementById('bl-time-empty');
+
+  if (!_timeBaselineData.length) {
+    tabsEl.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    destroyChart('timeBaseline');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+
+  // Build tabs for days that have at least one bucket
+  const daysPresent = [...new Set(_timeBaselineData.map(r => r.day_of_week))].sort();
+  // Convert Python weekday (0=Mon) to JS day label
+  const pyDowToLabel = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+  tabsEl.innerHTML = daysPresent.map(dow => {
+    const active = dow === _selectedDow ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500 hover:bg-gray-200';
+    return `<button class="px-3 py-1 rounded text-xs font-medium ${active}" data-dow="${dow}" onclick="selectTimeBaselineDow(${dow})">${pyDowToLabel[dow]}</button>`;
+  }).join('');
+
+  drawTimeBaselineChart(_selectedDow);
+}
+
+function selectTimeBaselineDow(dow) {
+  _selectedDow = dow;
+  renderTimeBaselineTabs();
+}
+
+function drawTimeBaselineChart(dow) {
+  destroyChart('timeBaseline');
+  const buckets = _timeBaselineData.filter(r => r.day_of_week === dow);
+  if (!buckets.length) return;
+
+  const byHour = Object.fromEntries(buckets.map(r => [r.hour_of_day, r]));
+  const labels = Array.from({ length: 24 }, (_, h) => `${String(h).padStart(2,'0')}:00`);
+  const values = Array.from({ length: 24 }, (_, h) => {
+    const b = byHour[h];
+    return b ? parseFloat(b.avg_block_rate_ewma ?? 0) : null;
+  });
+  const bgColors = values.map(v => {
+    if (v === null) return '#e5e7eb';
+    if (v > 30) return '#fca5a5';
+    if (v > 15) return '#fde68a';
+    return '#a7f3d0';
+  });
+
+  _charts.timeBaseline = new Chart(document.getElementById('timeBaselineChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Avg block rate %',
+        data: values,
+        backgroundColor: bgColors,
+        borderRadius: 3,
+      }]
+    },
+    options: {
+      animation: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 12, font: { size: 9 } }, grid: { display: false } },
+        y: {
+          min: 0,
+          ticks: { font: { size: 10 }, callback: v => `${v}%` },
+          title: { display: true, text: 'Block rate %', font: { size: 10 } },
+        }
+      }
+    }
   });
 }
 
@@ -398,6 +495,148 @@ function drawCostChart(series) {
   });
 }
 
+/* ── Outcomes ──────────────────────────────────────────── */
+async function loadOutcomes() {
+  const data = await api('/dashboard/outcomes');
+  if (!data) return;
+
+  document.getElementById('oc-total').textContent    = data.total_measured;
+  document.getElementById('oc-resolved').textContent = data.resolved_count;
+
+  if (data.total_measured > 0) {
+    document.getElementById('oc-rate').textContent        = `${data.resolution_rate_pct}%`;
+    document.getElementById('oc-rate-bar').style.width    = `${data.resolution_rate_pct}%`;
+  } else {
+    document.getElementById('oc-rate').textContent = '--';
+  }
+
+  const tbody  = document.getElementById('oc-table');
+  const emptyEl = document.getElementById('oc-empty');
+  const recent = data.recent || [];
+
+  if (!recent.length) {
+    tbody.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+  tbody.innerHTML = recent.map(r => `
+    <tr>
+      <td class="px-4 py-2.5 text-xs text-gray-500">${r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</td>
+      <td class="px-4 py-2.5 text-xs text-gray-500">App ${r.app_info_id ?? '—'}</td>
+      <td class="px-4 py-2.5">${actionPill(r.action_taken || 'monitor')}</td>
+      <td class="px-4 py-2.5">${sevBadge(r.severity_at_action || 'none')}</td>
+      <td class="px-4 py-2.5">${r.severity_after ? sevBadge(r.severity_after) : '<span class="text-xs text-gray-400">—</span>'}</td>
+      <td class="px-4 py-2.5">${outcomePill(r.anomaly_resolved, r.severity_after)}</td>
+    </tr>`).join('');
+}
+
+/* ── Evals ─────────────────────────────────────────────── */
+async function loadEvals() {
+  const [trend, results] = await Promise.all([
+    apiRaw('/evals/summary'),
+    apiRaw('/evals/results?limit=1'),
+  ]);
+
+  const trendData = trend || [];
+  const chartEmpty = document.getElementById('evals-chart-empty');
+  if (!trendData.length) {
+    chartEmpty.classList.remove('hidden');
+    destroyChart('evals');
+  } else {
+    chartEmpty.classList.add('hidden');
+    drawEvalsChart(trendData);
+  }
+
+  const latestRun = results && results.length ? results[0] : null;
+  const runAtEl = document.getElementById('evals-run-at');
+  runAtEl.textContent = latestRun?.run_at ? `Run: ${new Date(latestRun.run_at).toLocaleString()}` : '';
+
+  const tbody  = document.getElementById('evals-table');
+  const emptyEl = document.getElementById('evals-empty');
+  const checks = latestRun?.checks || [];
+
+  if (!checks.length) {
+    tbody.innerHTML = '';
+    emptyEl.classList.remove('hidden');
+    return;
+  }
+  emptyEl.classList.add('hidden');
+  tbody.innerHTML = checks.map(c => `
+    <tr>
+      <td class="px-4 py-2.5 text-xs font-medium text-gray-700">${c.scenario}</td>
+      <td class="px-4 py-2.5 text-xs text-gray-500">${c.agent.replace(/_/g,' ')}</td>
+      <td class="px-4 py-2.5">${sevBadge(c.expected_severity || 'none')}</td>
+      <td class="px-4 py-2.5">${sevBadge(c.actual_severity || 'none')}</td>
+      <td class="px-4 py-2.5 text-xs text-gray-500">${c.expected_action || '—'}</td>
+      <td class="px-4 py-2.5 text-xs text-gray-500">${c.actual_action || '—'}</td>
+      <td class="px-4 py-2.5 text-center">${c.severity_correct
+        ? '<span class="text-emerald-600 font-bold">✓</span>'
+        : '<span class="text-red-500 font-bold">✗</span>'}</td>
+      <td class="px-4 py-2.5 text-center">${c.action_correct
+        ? '<span class="text-emerald-600 font-bold">✓</span>'
+        : '<span class="text-red-500 font-bold">✗</span>'}</td>
+    </tr>`).join('');
+}
+
+function drawEvalsChart(trend) {
+  destroyChart('evals');
+  const labels = trend.map(r => r.run_at ? new Date(r.run_at).toLocaleDateString() : r.run_id.slice(0, 8));
+  _charts.evals = new Chart(document.getElementById('evalsChart'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Severity accuracy %',
+          data: trend.map(r => r.severity_accuracy_pct),
+          borderColor: '#6366f1',
+          borderWidth: 2,
+          pointRadius: 4,
+          tension: 0.2,
+          fill: false,
+        },
+        {
+          label: 'Action accuracy %',
+          data: trend.map(r => r.action_accuracy_pct),
+          borderColor: '#10b981',
+          borderWidth: 2,
+          pointRadius: 4,
+          tension: 0.2,
+          fill: false,
+        },
+      ]
+    },
+    options: {
+      animation: false,
+      plugins: { legend: { labels: { font: { size: 10 }, boxWidth: 10 } } },
+      scales: {
+        x: { ticks: { font: { size: 10 } }, grid: { display: false } },
+        y: {
+          min: 0, max: 100,
+          ticks: { font: { size: 10 }, callback: v => `${v}%` },
+        }
+      }
+    }
+  });
+}
+
+async function runEvals() {
+  const btn = document.getElementById('evals-run-btn');
+  btn.disabled = true;
+  btn.textContent = 'Running…';
+  try {
+    const res = await fetch('/evals/run', { method: 'POST' });
+    if (!res.ok) throw new Error(res.statusText);
+    await loadEvals();
+  } catch(e) {
+    console.error('Eval run failed', e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Run evals now';
+  }
+}
+
 /* ── Utilities ─────────────────────────────────────────── */
 function relativeTime(date) {
   const diff = Math.floor((Date.now() - date) / 1000);
@@ -438,6 +677,8 @@ document.addEventListener('DOMContentLoaded', function () {
     const header = e.target.closest('.tl-header');
     if (header) toggleTl(header);
   });
+
+  document.getElementById('evals-run-btn').addEventListener('click', runEvals);
 
   startCountdown();
   applyFilterStyles();

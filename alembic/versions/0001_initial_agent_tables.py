@@ -20,6 +20,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    # Drop all tables so a re-run always starts from a clean slate.
+    op.execute("DROP TABLE IF EXISTS eval_run_results")
+    op.execute("DROP TABLE IF EXISTS action_outcomes")
+    op.execute("DROP TABLE IF EXISTS time_baselines")
+    op.execute("DROP TABLE IF EXISTS baseline_memory")
+    op.execute("DROP TABLE IF EXISTS orchestrator_results")
+    op.execute("DROP TABLE IF EXISTS agent_results")
+
     op.create_table(
         "agent_results",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
@@ -56,6 +64,8 @@ def upgrade() -> None:
         sa.Column("path_severity", sa.String(20), nullable=True),
         sa.Column("final_severity", sa.String(20), nullable=True),
         sa.Column("anomaly_detected", sa.Boolean(), nullable=True),
+        sa.Column("spike_multiplier", sa.Numeric(10, 2), nullable=True),
+        sa.Column("trend_direction", sa.String(15), nullable=True),
         sa.Column("reason", sa.Text(), nullable=True),
         sa.Column("action", sa.String(20), nullable=True),
         sa.Column("tokens_used", sa.Integer(), nullable=True),
@@ -85,6 +95,44 @@ def upgrade() -> None:
     )
 
     op.create_table(
+        "time_baselines",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("app_info_id", sa.BigInteger(), nullable=True),
+        sa.Column("hour_of_day", sa.Integer(), nullable=False),
+        sa.Column("day_of_week", sa.Integer(), nullable=False),
+        sa.Column("avg_block_rate_ewma", sa.Numeric(10, 4), nullable=True),
+        sa.Column("avg_rps_ewma", sa.Numeric(10, 4), nullable=True),
+        sa.Column("sample_count", sa.Integer(), nullable=True),
+        sa.Column("last_updated", sa.DateTime(timezone=True), nullable=True),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "app_info_id", "hour_of_day", "day_of_week", name="uq_time_baseline"
+        ),
+    )
+    op.create_index("ix_time_baselines_app_info_id", "time_baselines", ["app_info_id"])
+
+    op.create_table(
+        "action_outcomes",
+        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
+        sa.Column("orchestrator_result_id", sa.BigInteger(), nullable=True),
+        sa.Column("app_info_id", sa.BigInteger(), nullable=True),
+        sa.Column("action_taken", sa.String(20), nullable=True),
+        sa.Column("severity_at_action", sa.String(20), nullable=True),
+        sa.Column("severity_after", sa.String(20), nullable=True),
+        sa.Column("anomaly_resolved", sa.Boolean(), nullable=True),
+        sa.Column("measured_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(
+        "ix_action_outcomes_orchestrator_result_id",
+        "action_outcomes",
+        ["orchestrator_result_id"],
+    )
+    op.create_index("ix_action_outcomes_app_info_id", "action_outcomes", ["app_info_id"])
+    op.create_index("ix_action_outcomes_created_at", "action_outcomes", ["created_at"])
+
+    op.create_table(
         "eval_run_results",
         sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False),
         sa.Column("run_id", sa.String(36), nullable=True),
@@ -107,6 +155,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table("eval_run_results")
+    op.drop_table("action_outcomes")
+    op.drop_table("time_baselines")
     op.drop_table("baseline_memory")
     op.drop_table("orchestrator_results")
     op.drop_table("agent_results")

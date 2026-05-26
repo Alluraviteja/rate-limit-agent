@@ -167,6 +167,81 @@ def _path_attack() -> list[dict]:
     return logs
 
 
+def _flash_crowd() -> list[dict]:
+    # 500 requests, 1.6% block rate, healthy tokens — legitimate traffic spike
+    now = _now()
+    paths = ["/api/v1/products", "/api/v1/users", "/api/v1/orders", "/api/v1/search", "/api/v1/feed"]
+    logs = []
+    for i in range(500):
+        at = now - timedelta(minutes=14) + timedelta(seconds=i * 1.68)
+        blocked = i < 8
+        logs.append(
+            _log(
+                request_at=at,
+                was_blocked=blocked,
+                response_code=429 if blocked else 200,
+                remaining_tokens=70 + (i % 30),
+                request_path=paths[i % len(paths)],
+                reason="rate_limit" if blocked else None,
+            )
+        )
+    return logs
+
+
+def _gradual_ramp() -> list[dict]:
+    # 25% block rate + 40% near-depletion → error_pattern medium, token medium
+    # Orchestrator sees 2 medium agents → escalates to high
+    now = _now()
+    logs = []
+    for i in range(100):
+        at = now - timedelta(minutes=14) + timedelta(seconds=i * 8)
+        blocked = i < 25
+        tokens = 5 if i < 40 else 80
+        logs.append(
+            _log(
+                request_at=at,
+                was_blocked=blocked,
+                response_code=429 if blocked else 200,
+                remaining_tokens=tokens,
+                request_path="/api/v1/data",
+                reason="rate_limit" if blocked else None,
+            )
+        )
+    return logs
+
+
+def _multi_vector() -> list[dict]:
+    # Path attack (83% block on /api/attack) + 20 depleted + 60 near-depletion
+    # Tests that orchestrator fires critical when multiple independent signals align
+    now = _now()
+    logs = []
+    for i in range(180):
+        at = now - timedelta(minutes=59) + timedelta(seconds=i * 20)
+        blocked = i < 150
+        logs.append(
+            _log(
+                request_at=at,
+                was_blocked=blocked,
+                response_code=429 if blocked else 200,
+                remaining_tokens=20 + (i % 30),
+                request_path="/api/attack",
+                reason="rate_limit" if blocked else None,
+            )
+        )
+    for i in range(20):
+        at = now - timedelta(minutes=59) + timedelta(seconds=i * 180)
+        logs.append(
+            _log(request_at=at, was_blocked=False, response_code=200, remaining_tokens=90, request_path="/api/normal")
+        )
+    for i in range(100):
+        at = now - timedelta(minutes=14) + timedelta(seconds=i * 8)
+        tokens = 0 if i < 20 else 2 if i < 80 else 90
+        logs.append(
+            _log(request_at=at, was_blocked=False, response_code=200, remaining_tokens=tokens, request_path="/api/v1/data")
+        )
+    return logs
+
+
 # ── Scenario registry ────────────────────────────────────────────────────────
 
 SCENARIOS: list[EvalScenario] = [
@@ -221,6 +296,39 @@ SCENARIOS: list[EvalScenario] = [
         expected={
             "error_pattern": {"severity": "high", "action": "throttle"},
             "token_bucket_health": {"severity": "none", "action": "monitor"},
+            "top_paths": {"severity": "critical", "action": "block"},
+            "orchestrator": {"severity": "critical", "action": "block"},
+        },
+    ),
+    EvalScenario(
+        name="flash_crowd",
+        description="500 legitimate requests, 1.6% block rate — all agents should stay none",
+        log_factory=_flash_crowd,
+        expected={
+            "error_pattern": {"severity": "none", "action": "monitor"},
+            "token_bucket_health": {"severity": "none", "action": "monitor"},
+            "top_paths": {"severity": "none", "action": "monitor"},
+            "orchestrator": {"severity": "none", "action": "monitor"},
+        },
+    ),
+    EvalScenario(
+        name="gradual_ramp",
+        description="25% block rate + 40% near-depletion — two medium agents, orchestrator escalates to high",
+        log_factory=_gradual_ramp,
+        expected={
+            "error_pattern": {"severity": "medium", "action": "alert"},
+            "token_bucket_health": {"severity": "medium", "action": "alert"},
+            "top_paths": {"severity": "low", "action": "monitor"},
+            "orchestrator": {"severity": "high", "action": "throttle"},
+        },
+    ),
+    EvalScenario(
+        name="multi_vector",
+        description="Path attack (83% block) + token depletion (20 depleted) — orchestrator critical",
+        log_factory=_multi_vector,
+        expected={
+            "error_pattern": {"severity": "high", "action": "throttle"},
+            "token_bucket_health": {"severity": "critical", "action": "block"},
             "top_paths": {"severity": "critical", "action": "block"},
             "orchestrator": {"severity": "critical", "action": "block"},
         },

@@ -103,6 +103,13 @@ async def health():
     return {"status": "ok"}
 
 
+@app.post("/run-now", tags=["ops"])
+async def trigger_run():
+    """Manually trigger one full agent pipeline run for all apps."""
+    await asyncio.to_thread(run_all_agents)
+    return {"status": "ok"}
+
+
 @app.get("/health/ready", tags=["ops"])
 async def health_ready():
     checks: dict[str, str] = {}

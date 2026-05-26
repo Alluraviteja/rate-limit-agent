@@ -9,7 +9,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ..database import get_agent_db
-from ..models import AgentResult, OrchestratorResult
+from ..models import ActionOutcome, AgentResult, OrchestratorResult, TimeBaseline
 from ..tools.memory_service import get_or_create_baseline
 from ..tools.mcp_client import get_mcp
 from .. import schemas
@@ -50,6 +50,46 @@ def apps(agent_db: Session = Depends(get_agent_db)):
         for r in rows
         if r[0] is not None
     ]
+
+
+@router.get("/status", response_model=list[schemas.AppStatusOut])
+def status(agent_db: Session = Depends(get_agent_db)):
+    """Latest orchestrator result per app — powers the per-app status grid."""
+    ids = _enabled_ids(None, agent_db)
+    apps_map: dict[int, str] = {}
+    mcp = get_mcp()
+    if mcp is not None:
+        apps_map = {int(a["id"]): a.get("display_name") or a.get("service_name") or f"App {a['id']}" for a in mcp.list_apps()}
+
+    result = []
+    for app_id in ids:
+        latest = (
+            agent_db.query(OrchestratorResult)
+            .filter(OrchestratorResult.app_info_id == app_id)
+            .order_by(OrchestratorResult.run_at.desc())
+            .first()
+        )
+        if latest:
+            agents_firing = sum(
+                1 for s in [latest.error_severity, latest.token_severity, latest.path_severity]
+                if s and s != "none"
+            )
+            result.append({
+                "app_info_id": app_id,
+                "app_name": apps_map.get(app_id) or f"App {app_id}",
+                "final_severity": latest.final_severity,
+                "action": latest.action,
+                "anomaly_detected": latest.anomaly_detected,
+                "spike_multiplier": float(latest.spike_multiplier) if latest.spike_multiplier is not None else None,
+                "trend_direction": latest.trend_direction,
+                "agents_firing": agents_firing,
+                "error_severity": latest.error_severity,
+                "token_severity": latest.token_severity,
+                "path_severity": latest.path_severity,
+                "reason": latest.reason,
+                "run_at": latest.run_at.isoformat() if latest.run_at else None,
+            })
+    return result
 
 
 @router.get("/summary", response_model=schemas.SummaryOut)
@@ -169,6 +209,15 @@ def timeline(
         q.order_by(OrchestratorResult.run_at.desc()).offset(offset).limit(limit).all()
     )
 
+    # Batch-fetch outcomes so the timeline doesn't do N+1 queries.
+    orch_ids = [o.id for o in orch_rows]
+    outcomes_by_orch = {
+        o.orchestrator_result_id: o
+        for o in agent_db.query(ActionOutcome)
+        .filter(ActionOutcome.orchestrator_result_id.in_(orch_ids))
+        .all()
+    }
+
     results = []
     for orch in orch_rows:
         window_start = orch.run_at - timedelta(seconds=30)
@@ -186,17 +235,27 @@ def timeline(
         e = by_name.get("error_pattern")
         t = by_name.get("token_bucket_health")
         p = by_name.get("top_paths")
+        outcome = outcomes_by_orch.get(orch.id)
 
+        agents_firing = sum(
+            1 for s in [orch.error_severity, orch.token_severity, orch.path_severity]
+            if s and s != "none"
+        )
         results.append(
             {
                 "app_info_id": orch.app_info_id,
                 "run_at": orch.run_at.isoformat(),
                 "final_severity": orch.final_severity,
                 "anomaly_detected": orch.anomaly_detected,
+                "spike_multiplier": float(orch.spike_multiplier) if orch.spike_multiplier is not None else None,
+                "trend_direction": orch.trend_direction,
+                "agents_firing": agents_firing,
                 "action": orch.action,
                 "reason": orch.reason,
                 "tokens_used": orch.tokens_used,
                 "cost_usd": float(orch.cost_usd or 0),
+                "anomaly_resolved": outcome.anomaly_resolved if outcome else None,
+                "severity_after": outcome.severity_after if outcome else None,
                 "error": {
                     "severity": e.severity if e else "none",
                     "block_rate_pct": float(e.block_rate_pct or 0) if e else 0,
@@ -310,3 +369,50 @@ def cost(
         daily_series.append(entry)
 
     return {"by_agent": by_agent, "daily_series": daily_series}
+
+
+@router.get("/outcomes", response_model=schemas.OutcomesSummaryOut)
+def outcomes(
+    app_info_id: Optional[int] = Query(None, gt=0),
+    agent_db: Session = Depends(get_agent_db),
+):
+    ids = _enabled_ids(app_info_id, agent_db)
+
+    measured_q = agent_db.query(ActionOutcome).filter(
+        ActionOutcome.app_info_id.in_(ids),
+        ActionOutcome.measured_at.isnot(None),
+    )
+    total_measured = measured_q.count()
+    resolved_count = (
+        measured_q.filter(ActionOutcome.anomaly_resolved.is_(True)).count()
+    )
+    rate = round(resolved_count / total_measured * 100, 1) if total_measured else 0.0
+
+    recent = (
+        agent_db.query(ActionOutcome)
+        .filter(ActionOutcome.app_info_id.in_(ids))
+        .order_by(ActionOutcome.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    return {
+        "total_measured": total_measured,
+        "resolved_count": resolved_count,
+        "resolution_rate_pct": rate,
+        "recent": [_row(r) for r in recent],
+    }
+
+
+@router.get("/time-baseline", response_model=list[schemas.TimeBaselineItemOut])
+def time_baseline_view(
+    app_info_id: Optional[int] = Query(None, gt=0),
+    agent_db: Session = Depends(get_agent_db),
+):
+    ids = _enabled_ids(app_info_id, agent_db)
+    rows = (
+        agent_db.query(TimeBaseline)
+        .filter(TimeBaseline.app_info_id.in_(ids))
+        .order_by(TimeBaseline.day_of_week, TimeBaseline.hour_of_day)
+        .all()
+    )
+    return [_row(r) for r in rows]

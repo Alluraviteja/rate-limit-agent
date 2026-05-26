@@ -11,6 +11,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    UniqueConstraint,
 )
 
 from .database import AgentBase
@@ -56,6 +57,8 @@ class OrchestratorResult(AgentBase):
     path_severity = Column(String(20))
     final_severity = Column(String(20))
     anomaly_detected = Column(Boolean)
+    spike_multiplier = Column(Numeric(10, 2), nullable=True)
+    trend_direction = Column(String(15), nullable=True)  # escalating / recovering / stable
     reason = Column(Text)
     action = Column(String(20))
     tokens_used = Column(Integer)
@@ -80,6 +83,59 @@ class BaselineMemory(AgentBase):
     last_updated = Column(
         DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class TimeBaseline(AgentBase):
+    """Per-app, per-hour-of-day, per-day-of-week EWMA baselines.
+
+    168 buckets per app (24h × 7 days). Each bucket tracks the rolling average
+    block rate for that time slot using EWMA so anomaly detection can compare
+    current metrics against what is normal for this specific time, not an
+    all-time average.
+    """
+
+    __tablename__ = "time_baselines"
+    __table_args__ = (
+        UniqueConstraint("app_info_id", "hour_of_day", "day_of_week", name="uq_time_baseline"),
+    )
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    app_info_id = Column(BigInteger, index=True)
+    hour_of_day = Column(Integer)   # 0–23
+    day_of_week = Column(Integer)   # 0=Monday … 6=Sunday
+    avg_block_rate_ewma = Column(Numeric(10, 4), default=5.0)
+    avg_rps_ewma = Column(Numeric(10, 4), default=100.0)
+    sample_count = Column(Integer, default=0)
+    last_updated = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+
+class ActionOutcome(AgentBase):
+    """Records what happened after each orchestrator decision.
+
+    Populated immediately after every pipeline run (severity_after=NULL).
+    On the next run for the same app, the previous row is filled in with
+    severity_after and anomaly_resolved so we can measure whether the
+    recommended action actually resolved the anomaly.
+    """
+
+    __tablename__ = "action_outcomes"
+
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    orchestrator_result_id = Column(BigInteger, index=True)
+    app_info_id = Column(BigInteger, index=True)
+    action_taken = Column(String(20))
+    severity_at_action = Column(String(20))
+    severity_after = Column(String(20), nullable=True)
+    anomaly_resolved = Column(Boolean, nullable=True)
+    measured_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
     )
 
 

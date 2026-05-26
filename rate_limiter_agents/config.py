@@ -7,7 +7,7 @@ from .providers.base import LLMProviderType
 AGENT_DB_URL: str = os.getenv("AGENT_DB_URL", "")
 ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
-AGENT_INTERVAL_MINUTES: int = int(os.getenv("AGENT_INTERVAL_MINUTES", "15"))
+AGENT_INTERVAL_MINUTES: int = int(os.getenv("AGENT_INTERVAL_MINUTES", "1"))
 CORS_ORIGINS: list[str] = os.getenv("CORS_ORIGINS", "http://localhost:8000").split(",")
 
 LLM_PROVIDER: LLMProviderType = LLMProviderType(os.getenv("LLM_PROVIDER", "anthropic"))
@@ -18,3 +18,9 @@ MCP_SERVER_URL: str = os.getenv("MCP_SERVER_URL", "")
 MCP_SECRET: str = os.getenv(
     "MCP_SECRET", "local-dev-mcp-secret-do-not-use-in-production"
 )
+
+# Action enforcement: when set, the orchestrator POSTs every decision here.
+# The receiver is responsible for translating block/throttle/alert into WAF rules,
+# Redis policy updates, PagerDuty alerts, etc.
+ENFORCEMENT_WEBHOOK_URL: str = os.getenv("ENFORCEMENT_WEBHOOK_URL", "")
+ENFORCEMENT_WEBHOOK_SECRET: str = os.getenv("ENFORCEMENT_WEBHOOK_SECRET", "")

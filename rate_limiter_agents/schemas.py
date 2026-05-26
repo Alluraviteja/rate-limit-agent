@@ -60,6 +60,8 @@ class OrchestratorResultOut(BaseModel):
     path_severity: Optional[str] = None
     final_severity: Optional[str] = None
     anomaly_detected: Optional[bool] = None
+    spike_multiplier: Optional[float] = None
+    trend_direction: Optional[str] = None
     reason: Optional[str] = None
     action: Optional[str] = None
     tokens_used: Optional[int] = None
@@ -144,13 +146,47 @@ class TimelineItemOut(BaseModel):
     run_at: str
     final_severity: Optional[str] = None
     anomaly_detected: Optional[bool] = None
+    spike_multiplier: Optional[float] = None
+    trend_direction: Optional[str] = None
+    agents_firing: int = 0
     action: Optional[str] = None
     reason: Optional[str] = None
     tokens_used: Optional[int] = None
     cost_usd: float
+    anomaly_resolved: Optional[bool] = None
+    severity_after: Optional[str] = None
     error: TimelineErrorDetail
     token: TimelineTokenDetail
     paths: TimelinePathsDetail
+
+
+class ActionOutcomeOut(BaseModel):
+    id: int
+    app_info_id: Optional[int] = None
+    action_taken: Optional[str] = None
+    severity_at_action: Optional[str] = None
+    severity_after: Optional[str] = None
+    anomaly_resolved: Optional[bool] = None
+    measured_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+
+class OutcomesSummaryOut(BaseModel):
+    total_measured: int
+    resolved_count: int
+    resolution_rate_pct: float
+    recent: list[ActionOutcomeOut]
+
+
+class TimeBaselineItemOut(BaseModel):
+    id: int
+    app_info_id: Optional[int] = None
+    hour_of_day: Optional[int] = None
+    day_of_week: Optional[int] = None
+    avg_block_rate_ewma: Optional[float] = None
+    avg_rps_ewma: Optional[float] = None
+    sample_count: Optional[int] = None
+    last_updated: Optional[datetime] = None
 
 
 class CostByAgentOut(BaseModel):
@@ -171,6 +207,22 @@ class DailyCostOut(BaseModel):
 class CostOut(BaseModel):
     by_agent: list[CostByAgentOut]
     daily_series: list[DailyCostOut]
+
+
+class AppStatusOut(BaseModel):
+    app_info_id: int
+    app_name: Optional[str] = None
+    final_severity: Optional[str] = None
+    action: Optional[str] = None
+    anomaly_detected: Optional[bool] = None
+    spike_multiplier: Optional[float] = None
+    trend_direction: Optional[str] = None
+    agents_firing: int = 0
+    error_severity: Optional[str] = None
+    token_severity: Optional[str] = None
+    path_severity: Optional[str] = None
+    reason: Optional[str] = None
+    run_at: Optional[str] = None
 
 
 # ── Evals router ──────────────────────────────────────────────────────────────
