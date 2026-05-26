@@ -35,11 +35,7 @@ def _enabled_ids(app_info_id: Optional[int], agent_db: Session) -> list[int]:
     mcp = get_mcp()
     if mcp is not None:
         return [int(a["id"]) for a in mcp.list_apps()]
-    rows = (
-        agent_db.query(OrchestratorResult.app_info_id)
-        .distinct()
-        .all()
-    )
+    rows = agent_db.query(OrchestratorResult.app_info_id).distinct().all()
     return [r[0] for r in rows if r[0] is not None]
 
 
@@ -48,11 +44,7 @@ def apps(agent_db: Session = Depends(get_agent_db)):
     mcp = get_mcp()
     if mcp is not None:
         return mcp.list_apps()
-    rows = (
-        agent_db.query(OrchestratorResult.app_info_id)
-        .distinct()
-        .all()
-    )
+    rows = agent_db.query(OrchestratorResult.app_info_id).distinct().all()
     return [
         {"id": r[0], "service_name": f"App {r[0]}", "display_name": f"App {r[0]}"}
         for r in rows
