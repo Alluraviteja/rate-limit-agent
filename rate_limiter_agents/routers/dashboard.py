@@ -29,21 +29,27 @@ def _row(obj) -> dict:
     return {c.name: _val(getattr(obj, c.name)) for c in obj.__table__.columns}
 
 
-def _enabled_ids(app_info_id: Optional[int]) -> list[int]:
+def _enabled_ids(app_info_id: Optional[int], agent_db: Session) -> list[int]:
     if app_info_id:
         return [app_info_id]
     mcp = get_mcp()
-    if mcp is None:
-        return []
-    return [int(a["id"]) for a in mcp.list_apps()]
+    if mcp is not None:
+        return [int(a["id"]) for a in mcp.list_apps()]
+    rows = agent_db.query(OrchestratorResult.app_info_id).distinct().all()
+    return [r[0] for r in rows if r[0] is not None]
 
 
 @router.get("/apps", response_model=list[schemas.AppOut])
-def apps():
+def apps(agent_db: Session = Depends(get_agent_db)):
     mcp = get_mcp()
-    if mcp is None:
-        return []
-    return mcp.list_apps()
+    if mcp is not None:
+        return mcp.list_apps()
+    rows = agent_db.query(OrchestratorResult.app_info_id).distinct().all()
+    return [
+        {"id": r[0], "service_name": f"App {r[0]}", "display_name": f"App {r[0]}"}
+        for r in rows
+        if r[0] is not None
+    ]
 
 
 @router.get("/summary", response_model=schemas.SummaryOut)
@@ -51,7 +57,7 @@ def summary(
     app_info_id: Optional[int] = Query(None, gt=0),
     agent_db: Session = Depends(get_agent_db),
 ):
-    ids = _enabled_ids(app_info_id)
+    ids = _enabled_ids(app_info_id, agent_db)
 
     def aq(model):
         return agent_db.query(model).filter(model.app_info_id.in_(ids))
@@ -134,7 +140,7 @@ def timeline(
     offset: int = Query(0, ge=0),
     agent_db: Session = Depends(get_agent_db),
 ):
-    ids = _enabled_ids(app_info_id)
+    ids = _enabled_ids(app_info_id, agent_db)
 
     q = agent_db.query(OrchestratorResult).filter(
         OrchestratorResult.app_info_id.in_(ids)
@@ -227,7 +233,7 @@ def baseline(
     app_info_id: Optional[int] = Query(None, gt=0),
     agent_db: Session = Depends(get_agent_db),
 ):
-    ids = _enabled_ids(app_info_id)
+    ids = _enabled_ids(app_info_id, agent_db)
     return [_row(get_or_create_baseline(agent_db, i)) for i in ids]
 
 
@@ -236,7 +242,7 @@ def cost(
     app_info_id: Optional[int] = Query(None, gt=0),
     agent_db: Session = Depends(get_agent_db),
 ):
-    ids = _enabled_ids(app_info_id)
+    ids = _enabled_ids(app_info_id, agent_db)
     today = date.today()
     today_start = datetime(today.year, today.month, today.day, tzinfo=timezone.utc)
 
